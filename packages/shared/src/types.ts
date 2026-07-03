@@ -47,6 +47,8 @@ export interface SessionSummary {
   gitBranch: string | null;
   model: string | null;
   cliVersion: string | null;
+  /** Claude Code's generated session title, if the transcript recorded one. */
+  title: string | null;
   startedAt: string | null;
   lastActivityAt: string | null;
   status: SessionStatus;

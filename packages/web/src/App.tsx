@@ -7,6 +7,7 @@ import {
   Button,
   Group,
   Loader,
+  NumberInput,
   SegmentedControl,
   SimpleGrid,
   Text,
@@ -16,7 +17,7 @@ import {
 } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { IconPlus, IconRefresh, IconSearch, IconTerminal } from "@tabler/icons-react";
-import type { SessionSummary, SessionStatus } from "@claude-dashboard/shared";
+import type { SessionSummary, SessionStatus, StatsPeriod } from "@claude-dashboard/shared";
 import { fetchSnapshot, killSession } from "./api/client";
 import { SNAPSHOT_QUERY_KEY } from "./api/queryKeys";
 import { useDashboardSocket } from "./api/useDashboardSocket";
@@ -24,12 +25,16 @@ import { StatsHeader } from "./components/StatsHeader";
 import { SessionCard } from "./components/SessionCard";
 import { SessionDetailDrawer } from "./components/SessionDetailDrawer";
 import { NewSessionModal } from "./components/NewSessionModal";
+import { isRecentlyEnded } from "./utils/sessionHealth";
+import { sortSessions } from "./utils/sessionSort";
 
 type FilterOption = "all" | "active" | "ended";
 
 export default function App() {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<FilterOption>("active");
+  const [period, setPeriod] = useState<StatsPeriod>("7d");
+  const [endedWindowHours, setEndedWindowHours] = useState(4);
   const [selected, setSelected] = useState<SessionSummary | null>(null);
   const [newSessionOpen, setNewSessionOpen] = useState(false);
   const queryClient = useQueryClient();
@@ -62,8 +67,10 @@ export default function App() {
 
   const filtered = useMemo(() => {
     const activeStatuses: SessionStatus[] = ["running", "waiting_input", "idle"];
-    return sessions.filter((s) => {
-      if (filter === "active" && !activeStatuses.includes(s.status)) return false;
+    const matched = sessions.filter((s) => {
+      if (filter === "active" && !activeStatuses.includes(s.status) && !isRecentlyEnded(s, endedWindowHours)) {
+        return false;
+      }
       if (filter === "ended" && s.status !== "ended") return false;
       if (search.trim()) {
         const q = search.toLowerCase();
@@ -71,7 +78,8 @@ export default function App() {
       }
       return true;
     });
-  }, [sessions, filter, search]);
+    return sortSessions(matched);
+  }, [sessions, filter, search, endedWindowHours]);
 
   return (
     <AppShell header={{ height: 64 }} padding="md">
@@ -102,7 +110,7 @@ export default function App() {
       </AppShell.Header>
 
       <AppShell.Main>
-        {data && <StatsHeader totals={data.totals} />}
+        {data && <StatsHeader stats={data.statsByPeriod[period]} period={period} onPeriodChange={setPeriod} />}
 
         <Group justify="space-between" mt="lg" mb="sm">
           <TextInput
@@ -112,15 +120,32 @@ export default function App() {
             onChange={(e) => setSearch(e.currentTarget.value)}
             w={320}
           />
-          <SegmentedControl
-            value={filter}
-            onChange={(v) => setFilter(v as FilterOption)}
-            data={[
-              { label: "Active", value: "active" },
-              { label: "All", value: "all" },
-              { label: "Ended", value: "ended" },
-            ]}
-          />
+          <Group gap="sm">
+            {filter === "active" && (
+              <Tooltip label="Also show sessions that ended within this many hours" openDelay={300}>
+                <NumberInput
+                  size="xs"
+                  w={150}
+                  min={0}
+                  max={168}
+                  step={1}
+                  value={endedWindowHours}
+                  onChange={(v) => setEndedWindowHours(typeof v === "number" ? v : 0)}
+                  suffix="h ended"
+                  aria-label="Recently-ended window in hours"
+                />
+              </Tooltip>
+            )}
+            <SegmentedControl
+              value={filter}
+              onChange={(v) => setFilter(v as FilterOption)}
+              data={[
+                { label: "Active", value: "active" },
+                { label: "All", value: "all" },
+                { label: "Ended", value: "ended" },
+              ]}
+            />
+          </Group>
         </Group>
 
         {filtered.length === 0 && !isLoading && (

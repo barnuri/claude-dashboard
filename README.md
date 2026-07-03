@@ -34,7 +34,7 @@ bun install
 bun run dev
 ```
 
-This starts the API server on `http://localhost:3333` and the Vite dev server on
+This starts the API server on `http://localhost:3334` and the Vite dev server on
 `http://localhost:5280` (which proxies `/api` and `/ws` to the backend). Open
 `http://localhost:5280`.
 
@@ -48,22 +48,30 @@ bun run start
 
 - Builds the web UI first if `packages/web/dist` is missing or stale.
 - Serves the built UI **and** the API/WebSocket from the same server on
-  `http://localhost:3333` — open that URL directly.
+  `http://localhost:3334` — open that URL directly.
 - Watches both sides while it runs: server-source edits restart the server
   (`bun --watch`), and client-source edits rebuild `packages/web/dist`
   (`vite build --watch`), which the running server then serves.
 
 `bun run serve` is also available if you only want the server (no build, no watchers) —
-this is what the system service runs.
+this is what the system service runs, and it defaults to port `3333`.
+
+### Ports: local vs service
+
+A local run and the installed system service use **different ports on purpose**, so you
+can run `bun start` for development while the always-on service keeps running untouched:
+
+- **`bun start` / `bun run dev`** → server on **3334** (dev UI proxies to it).
+- **Installed service** (`bun run service:install`) → server on **3333**.
 
 Ports and paths are overridable via environment variables:
 
-| Variable             | Default              | Purpose                                  |
-| -------------------- | -------------------- | ---------------------------------------- |
-| `PORT`               | `3333`               | Server (API + WebSocket + built UI) port |
-| `WEB_PORT`           | `5280`               | Vite dev server port (`bun run dev`)     |
-| `WEB_DIST`           | `packages/web/dist`  | Built UI directory the server serves     |
-| `CLAUDE_DASHBOARD_API` | `http://localhost:3333` | Proxy target for the Vite dev server  |
+| Variable               | Default                 | Purpose                                             |
+| ---------------------- | ----------------------- | --------------------------------------------------- |
+| `PORT`                 | `3334` local / `3333` service | Server (API + WebSocket + built UI) port      |
+| `WEB_PORT`             | `5280`                  | Vite dev server port (`bun run dev`)                |
+| `WEB_DIST`             | `packages/web/dist`     | Built UI directory the server serves                |
+| `CLAUDE_DASHBOARD_API` | `http://localhost:3334` | Proxy target for the Vite dev server                |
 
 ## Running as a system service
 
@@ -83,8 +91,9 @@ bun run service:uninstall   # remove it
   (the watchdog) and enables it at login.
 
 The service runs `bun run serve` from the repo, so make sure the UI has been built at
-least once (`bun run build`, or a prior `bun run start`). It listens on `PORT` (default
-`3333`).
+least once (`bun run build`, or a prior `bun run start`). It listens on port `3333` (set
+explicitly in the service definition, so it stays independent of a local `bun start` on
+3334).
 
 ## How session discovery works
 

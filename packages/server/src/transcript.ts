@@ -18,6 +18,8 @@ export interface ParsedTranscript {
   gitBranch: string | null;
   model: string | null;
   cliVersion: string | null;
+  /** Claude Code's generated session title (from `ai-title` lines), if present. */
+  title: string | null;
   startedAt: string | null;
   lastActivityAt: string | null;
   messageCount: number;
@@ -159,6 +161,7 @@ export function parseTranscriptFile(filePath: string, fallbackId: string): Parse
   let gitBranch: string | null = null;
   let model: string | null = null;
   let cliVersion: string | null = null;
+  let title: string | null = null;
   let startedAt: string | null = null;
   let lastActivityAt: string | null = null;
   let lastAction: LastAction | null = null;
@@ -187,6 +190,9 @@ export function parseTranscriptFile(filePath: string, fallbackId: string): Parse
     if (typeof entry.cwd === "string") cwd = entry.cwd;
     if (typeof entry.gitBranch === "string") gitBranch = entry.gitBranch;
     if (typeof entry.version === "string") cliVersion = entry.version;
+    if (entry.type === "ai-title" && typeof entry.aiTitle === "string" && entry.aiTitle.trim()) {
+      title = entry.aiTitle.trim();
+    }
     if (typeof entry.timestamp === "string") {
       if (!startedAt) startedAt = entry.timestamp;
       lastActivityAt = entry.timestamp;
@@ -251,6 +257,7 @@ export function parseTranscriptFile(filePath: string, fallbackId: string): Parse
     gitBranch,
     model,
     cliVersion,
+    title,
     startedAt,
     lastActivityAt,
     messageCount,

@@ -17,6 +17,8 @@ interface ServicePaths {
  */
 export class ServiceManager {
     private static readonly LABEL = "com.claude-dashboard.server";
+    /** The installed service always listens on 3333; local `bun start` uses 3334. */
+    private static readonly SERVICE_PORT = "3333";
 
     private readonly paths: ServicePaths;
     private readonly os: NodeJS.Platform;
@@ -43,6 +45,11 @@ export class ServiceManager {
     </array>
     <key>WorkingDirectory</key>
     <string>${repoRoot}</string>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PORT</key>
+        <string>${ServiceManager.SERVICE_PORT}</string>
+    </dict>
     <key>RunAtLoad</key>
     <true/>
     <key>KeepAlive</key>
@@ -66,6 +73,7 @@ After=network.target
 [Service]
 Type=simple
 WorkingDirectory=${repoRoot}
+Environment=PORT=${ServiceManager.SERVICE_PORT}
 ExecStart=${bunPath} run serve
 Restart=always
 RestartSec=2
