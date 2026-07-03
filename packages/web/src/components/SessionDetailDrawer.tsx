@@ -1,30 +1,45 @@
 import { useQuery } from "@tanstack/react-query";
 import { BarChart } from "@mantine/charts";
 import {
-  Badge,
+  Box,
   Button,
   CopyButton,
   Divider,
   Drawer,
   Group,
   ScrollArea,
+  SimpleGrid,
   Stack,
   Text,
   Timeline,
 } from "@mantine/core";
-import { IconCheck, IconCopy, IconGitBranch, IconPlayerStopFilled } from "@tabler/icons-react";
+import { IconCheck, IconCopy, IconCpu, IconGitBranch, IconPlayerStopFilled } from "@tabler/icons-react";
 import type { SessionSummary } from "@claude-dashboard/shared";
 import { fetchFeed } from "../api/client";
 import { feedQueryKey } from "../api/queryKeys";
 import { StatusBadge } from "./StatusBadge";
+import { ContextMeter } from "./ContextMeter";
 import { actionIcon } from "./actionIcons";
-import { formatRelativeTime, formatTokens, formatUsd } from "../utils/format";
+import { basename, formatRelativeTime, formatTokens, formatUsd } from "../utils/format";
 import { vizColors } from "../theme";
 
 interface Props {
   session: SessionSummary | null;
   onClose: () => void;
   onKill: (session: SessionSummary) => void;
+}
+
+function MiniStat({ label, value }: { label: string; value: string }) {
+  return (
+    <Box>
+      <Text className="cd-label" c="dimmed">
+        {label}
+      </Text>
+      <Text fz={20} fw={600} mt={2} className="cd-mono">
+        {value}
+      </Text>
+    </Box>
+  );
 }
 
 export function SessionDetailDrawer({ session, onClose, onKill }: Props) {
@@ -59,20 +74,49 @@ export function SessionDetailDrawer({ session, onClose, onKill }: Props) {
   ];
 
   return (
-    <Drawer opened={opened} onClose={onClose} position="right" size="lg" title={live ? live.cwd : ""}>
+    <Drawer
+      opened={opened}
+      onClose={onClose}
+      position="right"
+      size="lg"
+      title={
+        live ? (
+          <Stack gap={2}>
+            <Text fw={600} ff="var(--cd-font-display)" fz="lg">
+              {basename(live.cwd)}
+            </Text>
+            <Text size="xs" c="dimmed" className="cd-mono">
+              {live.cwd}
+            </Text>
+          </Stack>
+        ) : (
+          ""
+        )
+      }
+    >
       {live && (
         <Stack gap="md">
           <Group justify="space-between">
-            <Group gap={6}>
+            <Group gap="md">
               <StatusBadge status={live.status} />
-              {live.model && <Badge variant="default">{live.model}</Badge>}
+              {live.model && (
+                <Group gap={4} wrap="nowrap">
+                  <IconCpu size={13} color={vizColors.muted} />
+                  <Text size="xs" c="dimmed" className="cd-mono">
+                    {live.model}
+                  </Text>
+                </Group>
+              )}
               {live.gitBranch && (
-                <Badge variant="default" leftSection={<IconGitBranch size={12} />}>
-                  {live.gitBranch}
-                </Badge>
+                <Group gap={4} wrap="nowrap">
+                  <IconGitBranch size={13} color={vizColors.muted} />
+                  <Text size="xs" c="dimmed" className="cd-mono">
+                    {live.gitBranch}
+                  </Text>
+                </Group>
               )}
             </Group>
-            <Text size="xs" c="dimmed">
+            <Text size="xs" c="dimmed" className="cd-mono">
               updated {formatRelativeTime(live.lastActivityAt)}
             </Text>
           </Group>
@@ -81,7 +125,7 @@ export function SessionDetailDrawer({ session, onClose, onKill }: Props) {
             <CopyButton value={`claude --resume ${live.id}`}>
               {({ copied, copy }) => (
                 <Button
-                  variant="light"
+                  variant="default"
                   leftSection={copied ? <IconCheck size={14} /> : <IconCopy size={14} />}
                   onClick={copy}
                 >
@@ -100,15 +144,17 @@ export function SessionDetailDrawer({ session, onClose, onKill }: Props) {
             </Button>
           </Group>
 
+          <SimpleGrid cols={3} spacing="md">
+            <MiniStat label="Cost" value={formatUsd(live.cost.totalUsd)} />
+            <MiniStat label="Turns" value={String(live.messageCount)} />
+            <MiniStat
+              label="Context"
+              value={`${formatTokens(live.usage.contextTokens)} / ${formatTokens(live.usage.contextLimit)}`}
+            />
+          </SimpleGrid>
+          <ContextMeter used={live.usage.contextTokens} limit={live.usage.contextLimit} />
+
           <Divider label="Cost breakdown" labelPosition="left" />
-          <Group justify="space-between" align="flex-end">
-            <Text size="24px" fw={700}>
-              {formatUsd(live.cost.totalUsd)}
-            </Text>
-            <Text size="xs" c="dimmed">
-              {formatTokens(live.usage.contextTokens)} / {formatTokens(live.usage.contextLimit)} context tokens
-            </Text>
-          </Group>
           <BarChart
             h={110}
             data={costData}
@@ -135,7 +181,7 @@ export function SessionDetailDrawer({ session, onClose, onKill }: Props) {
                     <Text size="sm" fw={item.role === "assistant" ? 500 : 400}>
                       {item.summary}
                     </Text>
-                    <Text size="xs" c="dimmed">
+                    <Text size="xs" c="dimmed" className="cd-mono">
                       {formatRelativeTime(item.at)}
                     </Text>
                   </Timeline.Item>

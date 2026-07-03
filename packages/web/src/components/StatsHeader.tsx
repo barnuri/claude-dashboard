@@ -28,15 +28,15 @@ interface Props {
 
 function StatTile({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
-    <Card padding="md">
-      <Text size="xs" c="dimmed" tt="uppercase" fw={600} lh={1.2}>
+    <Card>
+      <Text className="cd-label" c="dimmed">
         {label}
       </Text>
-      <Text size="28px" fw={700} mt={4} lh={1.1}>
+      <Text fz={26} fw={600} mt={6} lh={1.1} className="cd-mono">
         {value}
       </Text>
       {sub && (
-        <Text size="xs" c="dimmed" mt={2}>
+        <Text size="xs" c="dimmed" mt={4} className="cd-mono">
           {sub}
         </Text>
       )}
@@ -60,8 +60,8 @@ export function StatsHeader({ stats, period, onPeriodChange }: Props) {
   return (
     <Stack gap="sm">
       <Group justify="space-between" align="center">
-        <Text size="sm" c="dimmed">
-          Showing activity for the {windowLabel}
+        <Text className="cd-label" c="dimmed">
+          Overview — {windowLabel}
         </Text>
         <SegmentedControl
           size="xs"
@@ -79,7 +79,7 @@ export function StatsHeader({ stats, period, onPeriodChange }: Props) {
           value={formatTokens(totalTokens)}
           sub={`${formatTokens(stats.totalInputTokens)} in · ${formatTokens(stats.totalOutputTokens)} out`}
         />
-        <Card padding="md">
+        <Card>
           <Group gap="md" wrap="nowrap" align="center">
             <DonutChart
               data={chartData.length > 0 ? chartData : [{ name: "No data", value: 1, color: vizColors.gridline }]}
@@ -89,8 +89,8 @@ export function StatsHeader({ stats, period, onPeriodChange }: Props) {
               tooltipDataSource="segment"
               strokeWidth={0}
             />
-            <Stack gap={2}>
-              <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
+            <Stack gap={3}>
+              <Text className="cd-label" c="dimmed">
                 Token mix
               </Text>
               {chartData.length === 0 ? (
@@ -99,9 +99,18 @@ export function StatsHeader({ stats, period, onPeriodChange }: Props) {
                 </Text>
               ) : (
                 chartData.map((d) => (
-                  <Group key={d.name} gap={6}>
-                    <span style={{ width: 8, height: 8, borderRadius: 999, background: d.color, display: "inline-block" }} />
-                    <Text size="xs" c="dimmed">
+                  <Group key={d.name} gap={6} wrap="nowrap">
+                    <span
+                      style={{
+                        width: 8,
+                        height: 8,
+                        borderRadius: 999,
+                        background: d.color,
+                        display: "inline-block",
+                        flexShrink: 0,
+                      }}
+                    />
+                    <Text size="xs" c="dimmed" className="cd-mono">
                       {d.name} {formatTokens(d.value)}
                     </Text>
                   </Group>

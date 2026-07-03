@@ -239,8 +239,9 @@ export function parseTranscriptFile(filePath: string, fallbackId: string): Parse
       const action = extractLastAction(entry, blockType, block);
       if (action) lastAction = action;
 
-      const stopReason = entry.stop_reason;
-      turnComplete = blockType === "text" && (stopReason === "end_turn" || stopReason === "refusal" || stopReason === "max_tokens");
+      // stop_reason lives on the message object, not the top-level transcript entry.
+      const stopReason = msg?.stop_reason;
+      turnComplete = stopReason === "end_turn" || stopReason === "refusal" || stopReason === "max_tokens";
     } else if (entry.type === "user") {
       const content = entry.message?.content;
       const block = Array.isArray(content) ? content[0] : undefined;

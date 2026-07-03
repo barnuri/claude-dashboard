@@ -1,3 +1,13 @@
+:root {
+  --cd-page: #121110;
+  --cd-surface: #1a1816;
+  --cd-raised: #211e1b;
+  --cd-border: rgba(255, 255, 255, 0.09);
+  --cd-brand: #d97757;
+  --cd-font-display: "Chakra Petch", "IBM Plex Sans", system-ui, sans-serif;
+  --cd-font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
 html,
 body,
 #root {
@@ -6,4 +16,91 @@ body,
 
 body {
   margin: 0;
+  /* Faint terracotta wash at the top so the deck reads warm, not flat black. */
+  background:
+    radial-gradient(1100px 420px at 50% -120px, rgba(217, 119, 87, 0.07), transparent 70%),
+    var(--cd-page);
+  background-attachment: fixed;
+}
+
+:focus-visible {
+  outline: 2px solid var(--cd-brand);
+  outline-offset: 2px;
+}
+
+/* Data text: monospace with tabular figures so costs/tokens/timers never jitter. */
+.cd-mono {
+  font-family: var(--cd-font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.cd-label {
+  font-family: var(--cd-font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* Session "flight strip" cards. */
+.cd-card {
+  cursor: pointer;
+  transition:
+    border-color 150ms ease,
+    transform 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.cd-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(217, 119, 87, 0.45);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.38);
+}
+
+.cd-card:active {
+  transform: translateY(0);
+}
+
+/* Status LEDs. The ping ring marks sessions that are alive right now. */
+.cd-led {
+  position: relative;
+  display: inline-block;
+  flex-shrink: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: currentColor;
+}
+
+.cd-led--pulse::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: currentColor;
+  animation: cd-ping 2s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+
+@keyframes cd-ping {
+  0% {
+    transform: scale(1);
+    opacity: 0.6;
+  }
+  75%,
+  100% {
+    transform: scale(2.4);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cd-led--pulse::after {
+    animation: none;
+    display: none;
+  }
+  .cd-card,
+  .cd-card:hover {
+    transition: none;
+    transform: none;
+  }
 }

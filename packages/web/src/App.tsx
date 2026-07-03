@@ -4,13 +4,14 @@ import {
     ActionIcon,
     Alert,
     AppShell,
-    Badge,
+    Box,
     Button,
     Group,
     Loader,
     NumberInput,
     SegmentedControl,
     SimpleGrid,
+    Stack,
     Text,
     TextInput,
     Title,
@@ -23,7 +24,7 @@ import {
     IconPlus,
     IconRefresh,
     IconSearch,
-    IconTerminal,
+    IconTerminal2,
 } from "@tabler/icons-react";
 import type {
     SessionSummary,
@@ -37,10 +38,38 @@ import { StatsHeader } from "./components/StatsHeader";
 import { SessionCard } from "./components/SessionCard";
 import { SessionDetailDrawer } from "./components/SessionDetailDrawer";
 import { NewSessionModal } from "./components/NewSessionModal";
+import { ConfirmDialog } from "./components/ConfirmDialog";
 import { isRecentlyEnded } from "./utils/sessionHealth";
 import { sortSessions } from "./utils/sessionSort";
+import { vizColors } from "./theme";
 
 type FilterOption = "all" | "active" | "ended";
+
+const ACTIVE_STATUSES: SessionStatus[] = ["running", "waiting_input", "idle"];
+
+/** Header status strip item: LED + mono count, tmux-status-bar style. */
+function StatusStripItem({
+    color,
+    label,
+    pulse,
+}: {
+    color: string;
+    label: string;
+    pulse?: boolean;
+}) {
+    return (
+        <Group gap={7} wrap='nowrap'>
+            <span
+                className={`cd-led${pulse ? " cd-led--pulse" : ""}`}
+                style={{ color }}
+                aria-hidden
+            />
+            <Text size='xs' className='cd-mono' style={{ color }}>
+                {label}
+            </Text>
+        </Group>
+    );
+}
 
 export default function App() {
     const [search, setSearch] = useState("");
@@ -61,6 +90,7 @@ export default function App() {
     });
     const [selected, setSelected] = useState<SessionSummary | null>(null);
     const [newSessionOpen, setNewSessionOpen] = useState(false);
+    const [killTarget, setKillTarget] = useState<SessionSummary | null>(null);
     const queryClient = useQueryClient();
 
     const { data, isLoading } = useQuery({
@@ -82,22 +112,21 @@ export default function App() {
                 color: "orange",
             });
             queryClient.invalidateQueries({ queryKey: SNAPSHOT_QUERY_KEY });
+            setKillTarget(null);
         },
-        onError: (err: Error) =>
+        onError: (err: Error) => {
             notifications.show({
                 title: "Failed to kill session",
                 message: err.message,
                 color: "red",
-            }),
+            });
+            setKillTarget(null);
+        },
     });
 
     function handleKill(session: SessionSummary) {
         if (!session.pid) return;
-        const verb = DEMO_MODE ? "Simulate killing" : "Kill";
-        const ok = window.confirm(
-            `${verb} the Claude Code process (pid ${session.pid}) running in ${session.cwd}?`,
-        );
-        if (ok) killMutation.mutate(session);
+        setKillTarget(session);
     }
 
     const sessions = data?.sessions ?? [];
@@ -106,16 +135,35 @@ export default function App() {
         [sessions],
     );
 
+    const statusCounts = useMemo(() => {
+        const counts = { running: 0, waiting: 0, idle: 0, ended: 0 };
+        for (const s of sessions) {
+            if (s.status === "running") counts.running++;
+            else if (s.status === "waiting_input") counts.waiting++;
+            else if (s.status === "idle") counts.idle++;
+            else counts.ended++;
+        }
+        return counts;
+    }, [sessions]);
+
+    const filterCounts = useMemo(
+        () => ({
+            active: sessions.filter(
+                (s) =>
+                    ACTIVE_STATUSES.includes(s.status) ||
+                    isRecentlyEnded(s, endedWindowHours),
+            ).length,
+            all: sessions.length,
+            ended: sessions.filter((s) => s.status === "ended").length,
+        }),
+        [sessions, endedWindowHours],
+    );
+
     const filtered = useMemo(() => {
-        const activeStatuses: SessionStatus[] = [
-            "running",
-            "waiting_input",
-            "idle",
-        ];
         const matched = sessions.filter((s) => {
             if (
                 filter === "active" &&
-                !activeStatuses.includes(s.status) &&
+                !ACTIVE_STATUSES.includes(s.status) &&
                 !isRecentlyEnded(s, endedWindowHours)
             ) {
                 return false;
@@ -136,20 +184,67 @@ export default function App() {
 
     return (
         <AppShell header={{ height: 64 }} padding='md'>
-            <AppShell.Header>
-                <Group h='100%' px='md' justify='space-between'>
-                    <Group gap='xs'>
-                        <IconTerminal size={22} />
-                        <Title order={4}>Claude Sessions Dashboard</Title>
+            <AppShell.Header
+                style={{
+                    background: "rgba(18, 17, 16, 0.85)",
+                    backdropFilter: "blur(8px)",
+                }}
+            >
+                <Group h='100%' px='md' justify='space-between' wrap='nowrap'>
+                    <Group gap='sm' wrap='nowrap'>
+                        <Box
+                            style={{
+                                width: 30,
+                                height: 30,
+                                borderRadius: 8,
+                                background: vizColors.brand,
+                                display: "grid",
+                                placeItems: "center",
+                                flexShrink: 0,
+                            }}
+                        >
+                            <IconTerminal2 size={18} color='#26140c' />
+                        </Box>
+                        <Stack gap={0}>
+                            <Title order={5} lh={1.2}>
+                                Claude Sessions
+                            </Title>
+                            <Text
+                                className='cd-label'
+                                c='dimmed'
+                                visibleFrom='xs'
+                            >
+                                local session deck
+                            </Text>
+                        </Stack>
                         {isLoading && <Loader size='xs' />}
                     </Group>
-                    <Group gap='sm'>
-                        <Badge variant='dot' color='green'>
-                            live
-                        </Badge>
+                    <Group gap='lg' visibleFrom='md'>
+                        <StatusStripItem
+                            color={vizColors.status.good}
+                            label={`${statusCounts.running} running`}
+                            pulse={statusCounts.running > 0}
+                        />
+                        <StatusStripItem
+                            color={
+                                statusCounts.waiting > 0
+                                    ? vizColors.status.warning
+                                    : vizColors.muted
+                            }
+                            label={`${statusCounts.waiting} ${statusCounts.waiting === 1 ? "needs" : "need"} you`}
+                            pulse={statusCounts.waiting > 0}
+                        />
+                        <StatusStripItem
+                            color={vizColors.muted}
+                            label={`${statusCounts.idle} idle`}
+                        />
+                    </Group>
+                    <Group gap='sm' wrap='nowrap'>
                         <Tooltip label='Refresh now'>
                             <ActionIcon
                                 variant='default'
+                                size='lg'
+                                aria-label='Refresh sessions'
                                 onClick={() =>
                                     queryClient.invalidateQueries({
                                         queryKey: SNAPSHOT_QUERY_KEY,
@@ -173,7 +268,7 @@ export default function App() {
                 {DEMO_MODE && (
                     <Alert
                         icon={<IconInfoCircle size={16} />}
-                        color='blue'
+                        color='brand'
                         variant='light'
                         mb='md'
                         title="You're viewing a static demo"
@@ -195,6 +290,7 @@ export default function App() {
                 <Group justify='space-between' mt='lg' mb='sm'>
                     <TextInput
                         placeholder='Filter by folder or branch…'
+                        aria-label='Filter sessions by folder or branch'
                         leftSection={<IconSearch size={14} />}
                         value={search}
                         onChange={(e) => setSearch(e.currentTarget.value)}
@@ -227,19 +323,53 @@ export default function App() {
                             value={filter}
                             onChange={(v) => setFilter(v as FilterOption)}
                             data={[
-                                { label: "Active", value: "active" },
-                                { label: "All", value: "all" },
-                                { label: "Ended", value: "ended" },
+                                {
+                                    label: `Active · ${filterCounts.active}`,
+                                    value: "active",
+                                },
+                                {
+                                    label: `All · ${filterCounts.all}`,
+                                    value: "all",
+                                },
+                                {
+                                    label: `Ended · ${filterCounts.ended}`,
+                                    value: "ended",
+                                },
                             ]}
                         />
                     </Group>
                 </Group>
 
                 {filtered.length === 0 && !isLoading && (
-                    <Text c='dimmed' ta='center' mt='xl'>
-                        No sessions match. Try a different filter, or launch a
-                        new one.
-                    </Text>
+                    <Stack align='center' gap='sm' py={64}>
+                        <Box
+                            style={{
+                                width: 56,
+                                height: 56,
+                                borderRadius: 16,
+                                border: `1px dashed ${vizColors.gridline}`,
+                                display: "grid",
+                                placeItems: "center",
+                            }}
+                        >
+                            <IconTerminal2 size={26} color={vizColors.muted} />
+                        </Box>
+                        <Text fw={600} ff='var(--cd-font-display)'>
+                            No sessions here
+                        </Text>
+                        <Text size='sm' c='dimmed' ta='center' maw={380}>
+                            {search.trim()
+                                ? "Nothing matches this filter. Clear the search or switch views."
+                                : "Launch a Claude Code session and it will show up here in real time."}
+                        </Text>
+                        <Button
+                            variant='light'
+                            leftSection={<IconPlus size={16} />}
+                            onClick={() => setNewSessionOpen(true)}
+                        >
+                            New session
+                        </Button>
+                    </Stack>
                 )}
 
                 <SimpleGrid
@@ -267,6 +397,28 @@ export default function App() {
                 onClose={() => setNewSessionOpen(false)}
                 recentDirs={recentDirs}
             />
+            <ConfirmDialog
+                opened={killTarget !== null}
+                title={DEMO_MODE ? "Simulate killing this session?" : "Kill this session?"}
+                confirmLabel={DEMO_MODE ? "Simulate kill" : "Kill session"}
+                loading={killMutation.isPending}
+                onConfirm={() => killTarget && killMutation.mutate(killTarget)}
+                onCancel={() => setKillTarget(null)}
+            >
+                {killTarget && (
+                    <>
+                        This sends a stop signal to the Claude Code process{" "}
+                        <Text span className='cd-mono' c='bright'>
+                            pid {killTarget.pid}
+                        </Text>{" "}
+                        running in{" "}
+                        <Text span className='cd-mono' c='bright'>
+                            {killTarget.cwd}
+                        </Text>
+                        . Unsaved work in that session stops immediately.
+                    </>
+                )}
+            </ConfirmDialog>
         </AppShell>
     );
 }
