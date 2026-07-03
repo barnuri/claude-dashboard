@@ -134,6 +134,7 @@ export async function buildDashboardSnapshot(): Promise<DashboardSnapshot> {
       gitBranch: parsed.gitBranch,
       model: parsed.model,
       cliVersion: parsed.cliVersion,
+      title: parsed.title,
       startedAt: parsed.startedAt,
       lastActivityAt: parsed.lastActivityAt,
       status: deriveStatus(pid !== null, parsed.turnComplete),

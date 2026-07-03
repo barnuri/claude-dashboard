@@ -1,20 +1,42 @@
-import { Card, Group, SimpleGrid, Stack, Text } from "@mantine/core";
+import { Card, Group, SegmentedControl, SimpleGrid, Stack, Text } from "@mantine/core";
 import { DonutChart } from "@mantine/charts";
-import type { DashboardTotals } from "@claude-dashboard/shared";
+import type { PeriodStats, StatsPeriod } from "@claude-dashboard/shared";
 import { formatTokens, formatUsd } from "../utils/format";
 import { vizColors } from "../theme";
 
+const PERIOD_OPTIONS: { label: string; value: StatsPeriod }[] = [
+  { label: "24h", value: "24h" },
+  { label: "7d", value: "7d" },
+  { label: "14d", value: "14d" },
+  { label: "30d", value: "30d" },
+  { label: "All", value: "all" },
+];
+
+const PERIOD_SUBTITLE: Record<StatsPeriod, string> = {
+  "24h": "last 24 hours",
+  "7d": "last 7 days",
+  "14d": "last 14 days",
+  "30d": "last 30 days",
+  all: "all time",
+};
+
+interface Props {
+  stats: PeriodStats;
+  period: StatsPeriod;
+  onPeriodChange: (period: StatsPeriod) => void;
+}
+
 function StatTile({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
-    <Card padding="md">
-      <Text size="xs" c="dimmed" tt="uppercase" fw={600} lh={1.2}>
+    <Card>
+      <Text className="cd-label" c="dimmed">
         {label}
       </Text>
-      <Text size="28px" fw={700} mt={4} lh={1.1}>
+      <Text fz={26} fw={600} mt={6} lh={1.1} className="cd-mono">
         {value}
       </Text>
       {sub && (
-        <Text size="xs" c="dimmed" mt={2}>
+        <Text size="xs" c="dimmed" mt={4} className="cd-mono">
           {sub}
         </Text>
       )}
@@ -22,51 +44,82 @@ function StatTile({ label, value, sub }: { label: string; value: string; sub?: s
   );
 }
 
-export function StatsHeader({ totals }: { totals: DashboardTotals }) {
+export function StatsHeader({ stats, period, onPeriodChange }: Props) {
   const chartData = [
-    { name: "Input", value: totals.totalInputTokens, color: vizColors.series.blue },
-    { name: "Output", value: totals.totalOutputTokens, color: vizColors.series.aqua },
-    { name: "Cache write", value: totals.totalCacheCreationTokens, color: vizColors.series.yellow },
-    { name: "Cache read", value: totals.totalCacheReadTokens, color: vizColors.series.violet },
+    { name: "Input", value: stats.totalInputTokens, color: vizColors.series.blue },
+    { name: "Output", value: stats.totalOutputTokens, color: vizColors.series.aqua },
+    { name: "Cache write", value: stats.totalCacheCreationTokens, color: vizColors.series.yellow },
+    { name: "Cache read", value: stats.totalCacheReadTokens, color: vizColors.series.violet },
   ].filter((d) => d.value > 0);
 
   const totalTokens =
-    totals.totalInputTokens + totals.totalOutputTokens + totals.totalCacheCreationTokens + totals.totalCacheReadTokens;
+    stats.totalInputTokens + stats.totalOutputTokens + stats.totalCacheCreationTokens + stats.totalCacheReadTokens;
+
+  const windowLabel = PERIOD_SUBTITLE[period];
 
   return (
-    <SimpleGrid cols={{ base: 1, sm: 2, lg: 4 }} spacing="md">
-      <StatTile label="Sessions" value={String(totals.sessionCount)} sub={`${totals.runningCount} active`} />
-      <StatTile label="Total cost" value={formatUsd(totals.totalCostUsd)} sub="across all sessions" />
-      <StatTile
-        label="Tokens"
-        value={formatTokens(totalTokens)}
-        sub={`${formatTokens(totals.totalInputTokens)} in · ${formatTokens(totals.totalOutputTokens)} out`}
-      />
-      <Card padding="md">
-        <Group gap="md" wrap="nowrap" align="center">
-          <DonutChart
-            data={chartData}
-            size={64}
-            thickness={10}
-            withTooltip
-            tooltipDataSource="segment"
-            strokeWidth={0}
-          />
-          <Stack gap={2}>
-            <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
-              Token mix
-            </Text>
-            {chartData.map((d) => (
-              <Group key={d.name} gap={6}>
-                <span style={{ width: 8, height: 8, borderRadius: 999, background: d.color, display: "inline-block" }} />
+    <Stack gap="sm">
+      <Group justify="space-between" align="center">
+        <Text className="cd-label" c="dimmed">
+          Overview — {windowLabel}
+        </Text>
+        <SegmentedControl
+          size="xs"
+          value={period}
+          onChange={(v) => onPeriodChange(v as StatsPeriod)}
+          data={PERIOD_OPTIONS}
+        />
+      </Group>
+
+      <SimpleGrid cols={{ base: 1, sm: 2, lg: 4 }} spacing="md">
+        <StatTile label="Sessions" value={String(stats.sessionCount)} sub={`active ${windowLabel}`} />
+        <StatTile label="Cost" value={formatUsd(stats.totalCostUsd)} sub={windowLabel} />
+        <StatTile
+          label="Tokens"
+          value={formatTokens(totalTokens)}
+          sub={`${formatTokens(stats.totalInputTokens)} in · ${formatTokens(stats.totalOutputTokens)} out`}
+        />
+        <Card>
+          <Group gap="md" wrap="nowrap" align="center">
+            <DonutChart
+              data={chartData.length > 0 ? chartData : [{ name: "No data", value: 1, color: vizColors.gridline }]}
+              size={64}
+              thickness={10}
+              withTooltip
+              tooltipDataSource="segment"
+              strokeWidth={0}
+            />
+            <Stack gap={3}>
+              <Text className="cd-label" c="dimmed">
+                Token mix
+              </Text>
+              {chartData.length === 0 ? (
                 <Text size="xs" c="dimmed">
-                  {d.name} {formatTokens(d.value)}
+                  No activity {windowLabel}
                 </Text>
-              </Group>
-            ))}
-          </Stack>
-        </Group>
-      </Card>
-    </SimpleGrid>
+              ) : (
+                chartData.map((d) => (
+                  <Group key={d.name} gap={6} wrap="nowrap">
+                    <span
+                      style={{
+                        width: 8,
+                        height: 8,
+                        borderRadius: 999,
+                        background: d.color,
+                        display: "inline-block",
+                        flexShrink: 0,
+                      }}
+                    />
+                    <Text size="xs" c="dimmed" className="cd-mono">
+                      {d.name} {formatTokens(d.value)}
+                    </Text>
+                  </Group>
+                ))
+              )}
+            </Stack>
+          </Group>
+        </Card>
+      </SimpleGrid>
+    </Stack>
   );
 }

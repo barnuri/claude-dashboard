@@ -14,6 +14,8 @@
     "serve": "bun run --cwd packages/server start",
     "service:install": "bun run scripts/service.ts install",
     "service:uninstall": "bun run scripts/service.ts uninstall",
+    "service:restart": "bun run scripts/service.ts restart",
+    "service:update": "bun run build && bun run scripts/service.ts restart",
     "test": "bun test",
     "typecheck": "bun run --filter='*' typecheck && tsc -p tsconfig.json",
     "demo:record": "bun scripts/record-demo.mjs"

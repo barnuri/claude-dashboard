@@ -18,12 +18,12 @@ export interface SessionHealth {
 }
 
 /** Context-usage fraction (0–1) at which a session is flagged as approaching its limit. */
-const CONTEXT_SERIOUS = 0.75;
-const CONTEXT_CRITICAL = 0.9;
+export const CONTEXT_SERIOUS = 0.75;
+export const CONTEXT_CRITICAL = 0.9;
 
 const HEALTH_META: Record<HealthLevel, { color: string; label: string; dimmed: boolean }> = {
   running: { color: vizColors.status.good, label: "Running", dimmed: false },
-  waiting: { color: vizColors.status.warning, label: "Waiting on you", dimmed: false },
+  waiting: { color: vizColors.status.warning, label: "Needs you", dimmed: false },
   serious: { color: vizColors.status.serious, label: "Context high", dimmed: false },
   critical: { color: vizColors.status.critical, label: "Attention", dimmed: false },
   idle: { color: vizColors.muted, label: "Idle", dimmed: false },

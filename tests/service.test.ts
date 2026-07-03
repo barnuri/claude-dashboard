@@ -29,6 +29,12 @@ describe("ServiceManager.buildLaunchdPlist", () => {
         expect(plist).toContain(`${paths.logDir}/service.out.log`);
         expect(plist).toContain(`${paths.logDir}/service.err.log`);
     });
+
+    test("pins the service to port 3333 via EnvironmentVariables", () => {
+        expect(plist).toContain("<key>EnvironmentVariables</key>");
+        expect(plist).toContain("<key>PORT</key>");
+        expect(plist).toContain("<string>3333</string>");
+    });
 });
 
 describe("ServiceManager.buildSystemdUnit", () => {
@@ -46,6 +52,10 @@ describe("ServiceManager.buildSystemdUnit", () => {
     test("installs into the default login target", () => {
         expect(unit).toContain("WantedBy=default.target");
     });
+
+    test("pins the service to port 3333 via Environment", () => {
+        expect(unit).toContain("Environment=PORT=3333");
+    });
 });
 
 describe("ServiceManager platform guards", () => {
@@ -57,5 +67,10 @@ describe("ServiceManager platform guards", () => {
     test("uninstall rejects an unsupported platform", async () => {
         const manager = new ServiceManager(paths, "win32");
         await expect(manager.uninstall()).rejects.toThrow(/Unsupported platform/);
+    });
+
+    test("restart rejects an unsupported platform", async () => {
+        const manager = new ServiceManager(paths, "win32");
+        await expect(manager.restart()).rejects.toThrow(/Unsupported platform/);
     });
 });

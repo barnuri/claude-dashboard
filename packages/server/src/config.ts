@@ -6,6 +6,9 @@ export const CLAUDE_HOME =
 export const PROJECTS_DIR = join(CLAUDE_HOME, "projects");
 export const PORT = Number(process.env.PORT ?? 3333);
 
+/** Serve synthetic demo data instead of scanning ~/.claude and the process table. */
+export const MOCK_MODE = process.env.CLAUDE_DASHBOARD_MOCK === "1";
+
 /** Directory holding the built web UI (`vite build` output) that the server serves. */
 export const WEB_DIST =
     process.env.WEB_DIST ??

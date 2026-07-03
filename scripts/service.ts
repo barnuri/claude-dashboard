@@ -17,6 +17,8 @@ interface ServicePaths {
  */
 export class ServiceManager {
     private static readonly LABEL = "com.claude-dashboard.server";
+    /** The installed service always listens on 3333; local `bun start` uses 3334. */
+    private static readonly SERVICE_PORT = "3333";
 
     private readonly paths: ServicePaths;
     private readonly os: NodeJS.Platform;
@@ -43,6 +45,11 @@ export class ServiceManager {
     </array>
     <key>WorkingDirectory</key>
     <string>${repoRoot}</string>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PORT</key>
+        <string>${ServiceManager.SERVICE_PORT}</string>
+    </dict>
     <key>RunAtLoad</key>
     <true/>
     <key>KeepAlive</key>
@@ -66,6 +73,7 @@ After=network.target
 [Service]
 Type=simple
 WorkingDirectory=${repoRoot}
+Environment=PORT=${ServiceManager.SERVICE_PORT}
 ExecStart=${bunPath} run serve
 Restart=always
 RestartSec=2
@@ -99,6 +107,26 @@ WantedBy=default.target
             return;
         }
         throw new Error(`Unsupported platform for service uninstall: ${this.os}`);
+    }
+
+    /**
+     * Restart the running service so it picks up the latest code on disk. The service runs
+     * from the repo, so a code change only needs the server restarted (and the web UI
+     * rebuilt if the client changed) — not a full reinstall.
+     */
+    async restart(): Promise<void> {
+        if (this.os === "darwin") {
+            const uid = process.getuid?.() ?? 0;
+            await this.runLaunchctl(["kickstart", "-k", `gui/${uid}/${ServiceManager.LABEL}`], false);
+            console.log("[service] restarted launchd agent");
+            return;
+        }
+        if (this.os === "linux") {
+            await this.runSystemctl(["restart", `${ServiceManager.LABEL}.service`]);
+            console.log("[service] restarted systemd unit");
+            return;
+        }
+        throw new Error(`Unsupported platform for service restart: ${this.os}`);
     }
 
     private launchdPlistPath(): string {
@@ -167,8 +195,8 @@ WantedBy=default.target
 
 const action = process.argv[2];
 if (import.meta.main) {
-    if (action !== "install" && action !== "uninstall") {
-        console.error("usage: bun run scripts/service.ts <install|uninstall>");
+    if (action !== "install" && action !== "uninstall" && action !== "restart") {
+        console.error("usage: bun run scripts/service.ts <install|uninstall|restart>");
         process.exit(1);
     }
 
@@ -180,7 +208,9 @@ if (import.meta.main) {
 
     if (action === "install") {
         await manager.install();
-    } else {
+    } else if (action === "uninstall") {
         await manager.uninstall();
+    } else {
+        await manager.restart();
     }
 }

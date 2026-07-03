@@ -9,12 +9,19 @@ import { isDistStale } from "./dist-freshness";
  *  3. Runs `vite build --watch` so client-source edits rebuild `dist`, which the running
  *     server then serves.
  * The server serves the built UI and the API/WS on the same port (see the server entry).
+ *
+ * Defaults to port 3334 so a local `bun start` never collides with an installed system
+ * service (which runs on 3333). An explicit `PORT` env var still wins.
  */
 export class DevOrchestrator {
+    /** Default port for a local run; distinct from the service's 3333. */
+    private static readonly LOCAL_PORT = "3334";
+
     private readonly serverDir: string;
     private readonly webDir: string;
     private readonly webSrc: string;
     private readonly webDist: string;
+    private readonly port: string;
     private readonly children: Subprocess[] = [];
     private shuttingDown = false;
 
@@ -23,6 +30,7 @@ export class DevOrchestrator {
         this.webDir = join(repoRoot, "packages", "web");
         this.webSrc = join(this.webDir, "src");
         this.webDist = join(this.webDir, "dist");
+        this.port = process.env.PORT ?? DevOrchestrator.LOCAL_PORT;
     }
 
     async run(): Promise<void> {
@@ -63,12 +71,13 @@ export class DevOrchestrator {
     }
 
     private startServerWatcher(): void {
-        console.log("[start] starting server with --watch");
+        console.log(`[start] starting server with --watch on port ${this.port}`);
         this.track(
             Bun.spawn(["bun", "--watch", "src/index.ts"], {
                 cwd: this.serverDir,
                 stdout: "inherit",
                 stderr: "inherit",
+                env: { ...process.env, PORT: this.port },
             }),
         );
     }

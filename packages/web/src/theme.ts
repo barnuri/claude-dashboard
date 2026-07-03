@@ -1,14 +1,26 @@
 import { createTheme, type MantineColorsTuple } from "@mantine/core";
 
-// Palette derived from the dataviz skill's validated reference palette (dark-mode steps).
+/**
+ * "Mission deck" design tokens: warm ink surfaces, Claude terracotta as the
+ * single brand accent, and semantic status colors that carry all meaning.
+ * Chart series colors stay on the dataviz skill's validated dark-mode palette.
+ */
+export const fonts = {
+  display: "'Chakra Petch', 'IBM Plex Sans', system-ui, sans-serif",
+  body: "'IBM Plex Sans', system-ui, sans-serif",
+  mono: "'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace",
+};
+
 export const vizColors = {
-  surface: "#1a1a19",
-  page: "#0d0d0d",
-  textPrimary: "#ffffff",
-  textSecondary: "#c3c2b7",
-  muted: "#898781",
-  gridline: "#2c2c2a",
-  border: "rgba(255,255,255,0.10)",
+  page: "#121110",
+  surface: "#1a1816",
+  raised: "#211e1b",
+  textPrimary: "#f2efe9",
+  textSecondary: "#b3ac9f",
+  muted: "#847d70",
+  gridline: "#2c2a26",
+  border: "rgba(255,255,255,0.09)",
+  brand: "#d97757",
   series: {
     blue: "#3987e5", // input tokens
     aqua: "#199e70", // output tokens
@@ -17,42 +29,59 @@ export const vizColors = {
     red: "#e66767",
   },
   status: {
-    good: "#0ca30c", // running
-    warning: "#fab219", // waiting on user
+    good: "#3fb950", // running
+    warning: "#f0b429", // waiting on user
     serious: "#ec835a", // context pressure high
-    critical: "#d03b3b", // errored tool call / context at limit
-    ended: "#5a6b7d", // finished session — calm slate-blue, distinct from muted idle
+    critical: "#e5484d", // errored tool call / context at limit
+    ended: "#7d8ea1", // finished session — calm slate-blue, distinct from muted idle
   },
 };
 
-function toTuple(hex: string): MantineColorsTuple {
-  // Mantine needs a 10-step tuple; we only really use index 5-6 for solid fills,
-  // so approximate the ramp by lightening/darkening the base hue.
-  return [hex, hex, hex, hex, hex, hex, hex, hex, hex, hex] as unknown as MantineColorsTuple;
-}
+const brand: MantineColorsTuple = [
+  "#fbf0ea",
+  "#f4dccf",
+  "#edc3ac",
+  "#e5a988",
+  "#df8f68",
+  "#d97757",
+  "#c26243",
+  "#a24f35",
+  "#823e29",
+  "#622e1e",
+];
+
+// Warm dark ramp: dark[7] is the page body, dark[6] the card surface,
+// dark[4] the default border, dark[0..2] the text steps.
+const dark: MantineColorsTuple = [
+  "#f2efe9",
+  "#d9d4c9",
+  "#b3ac9f",
+  "#847d70",
+  "#3a362f",
+  "#2a2723",
+  "#1a1816",
+  "#121110",
+  "#0d0c0b",
+  "#080807",
+];
 
 export const theme = createTheme({
   primaryColor: "brand",
   primaryShade: 5,
-  colors: {
-    brand: [
-      "#e8f0fd",
-      "#c7dcf9",
-      "#a3c6f5",
-      "#7eb0f0",
-      "#5c9cec",
-      "#3987e5",
-      "#2f74c9",
-      "#2560ac",
-      "#1a4c8f",
-      "#0f3872",
-    ] as unknown as MantineColorsTuple,
-  },
-  fontFamily: "system-ui, -apple-system, 'Segoe UI', sans-serif",
+  autoContrast: true,
+  luminanceThreshold: 0.35,
+  black: "#26140c",
+  colors: { brand, dark },
+  fontFamily: fonts.body,
+  fontFamilyMonospace: fonts.mono,
+  headings: { fontFamily: fonts.display, fontWeight: "600" },
   defaultRadius: "md",
   components: {
     Card: {
-      defaultProps: { withBorder: true },
+      defaultProps: { withBorder: true, radius: "lg", padding: "md" },
+    },
+    Tooltip: {
+      defaultProps: { withArrow: true },
     },
   },
 });

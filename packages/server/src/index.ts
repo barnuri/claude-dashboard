@@ -1,7 +1,8 @@
 import type { CreateSessionRequest, ServerEvent } from "@claude-dashboard/shared";
-import { PORT, POLL_INTERVAL_MS, WEB_DIST } from "./config";
+import { PORT, POLL_INTERVAL_MS, WEB_DIST, MOCK_MODE } from "./config";
 import { buildDashboardSnapshot } from "./sessions";
 import { getTranscriptFeed } from "./transcript";
+import { MockDataProvider } from "./mock";
 import { killProcess } from "./processes";
 import { launchSession, LaunchError } from "./launch";
 import { StaticFileServer } from "./static";
@@ -23,6 +24,12 @@ const sockets = new Set<import("bun").ServerWebSocket<unknown>>();
 
 const staticServer = new StaticFileServer(WEB_DIST);
 
+const mockData = MOCK_MODE ? new MockDataProvider() : null;
+
+async function getSnapshot() {
+  return mockData ? mockData.buildSnapshot() : buildDashboardSnapshot();
+}
+
 function broadcast(event: ServerEvent) {
   const payload = JSON.stringify(event);
   for (const ws of sockets) {
@@ -36,7 +43,7 @@ function broadcast(event: ServerEvent) {
 
 async function pollAndBroadcast() {
   try {
-    const snapshot = await buildDashboardSnapshot();
+    const snapshot = await getSnapshot();
     broadcast({ type: "snapshot", data: snapshot });
   } catch (err: any) {
     broadcast({ type: "error", message: err?.message ?? String(err) });
@@ -61,7 +68,7 @@ const server = Bun.serve({
     }
 
     if (url.pathname === "/api/snapshot" && req.method === "GET") {
-      const snapshot = await buildDashboardSnapshot();
+      const snapshot = await getSnapshot();
       return json(snapshot);
     }
 
@@ -69,10 +76,10 @@ const server = Bun.serve({
       const id = url.searchParams.get("id");
       const limit = Number(url.searchParams.get("limit") ?? 60);
       if (!id) return json({ error: "id query param is required" }, 400);
-      const snapshot = await buildDashboardSnapshot();
+      const snapshot = await getSnapshot();
       const session = snapshot.sessions.find((s) => s.id === id);
       if (!session) return json({ error: "session not found" }, 404);
-      const feed = getTranscriptFeed(session.transcriptPath, limit);
+      const feed = mockData ? mockData.getFeed(session.id, limit) : getTranscriptFeed(session.transcriptPath, limit);
       return json({ session, feed });
     }
 
@@ -116,7 +123,7 @@ const server = Bun.serve({
   websocket: {
     open(ws) {
       sockets.add(ws);
-      buildDashboardSnapshot()
+      getSnapshot()
         .then((snapshot) => ws.send(JSON.stringify({ type: "snapshot", data: snapshot } satisfies ServerEvent)))
         .catch(() => {});
     },

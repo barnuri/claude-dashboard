@@ -18,6 +18,15 @@ The recording above is the real app, driven by [`scripts/record-demo.mjs`](scrip
 against a live session — nothing staged. Regenerate it with `bun run demo:record` (needs
 Playwright's Chromium — `bunx playwright install chromium` — and a system `ffmpeg`).
 
+**[Try the live demo →](https://barnuri.github.io/claude-dashboard/)**
+
+GitHub Pages only serves static files, so the live demo can't run the real Bun backend
+or read your `~/.claude/projects` — it's the same UI wired up to realistic sample data
+instead (`VITE_DEMO_MODE=true`, see `packages/web/src/demo/mockData.ts`). A few sessions
+tick along in different states, and "Kill"/"New session" simulate what they'd do for
+real. `.github/workflows/deploy-demo.yml` rebuilds and republishes it on every push to
+`main`. Run it locally against your own machine (below) for the real thing.
+
 ## Stack
 
 - **Bun** — package manager, runtime, and the backend server (`Bun.serve`, no framework)
@@ -34,7 +43,7 @@ bun install
 bun run dev
 ```
 
-This starts the API server on `http://localhost:3333` and the Vite dev server on
+This starts the API server on `http://localhost:3334` and the Vite dev server on
 `http://localhost:5280` (which proxies `/api` and `/ws` to the backend). Open
 `http://localhost:5280`.
 
@@ -48,22 +57,30 @@ bun run start
 
 - Builds the web UI first if `packages/web/dist` is missing or stale.
 - Serves the built UI **and** the API/WebSocket from the same server on
-  `http://localhost:3333` — open that URL directly.
+  `http://localhost:3334` — open that URL directly.
 - Watches both sides while it runs: server-source edits restart the server
   (`bun --watch`), and client-source edits rebuild `packages/web/dist`
   (`vite build --watch`), which the running server then serves.
 
 `bun run serve` is also available if you only want the server (no build, no watchers) —
-this is what the system service runs.
+this is what the system service runs, and it defaults to port `3333`.
+
+### Ports: local vs service
+
+A local run and the installed system service use **different ports on purpose**, so you
+can run `bun start` for development while the always-on service keeps running untouched:
+
+- **`bun start` / `bun run dev`** → server on **3334** (dev UI proxies to it).
+- **Installed service** (`bun run service:install`) → server on **3333**.
 
 Ports and paths are overridable via environment variables:
 
-| Variable             | Default              | Purpose                                  |
-| -------------------- | -------------------- | ---------------------------------------- |
-| `PORT`               | `3333`               | Server (API + WebSocket + built UI) port |
-| `WEB_PORT`           | `5280`               | Vite dev server port (`bun run dev`)     |
-| `WEB_DIST`           | `packages/web/dist`  | Built UI directory the server serves     |
-| `CLAUDE_DASHBOARD_API` | `http://localhost:3333` | Proxy target for the Vite dev server  |
+| Variable               | Default                 | Purpose                                             |
+| ---------------------- | ----------------------- | --------------------------------------------------- |
+| `PORT`                 | `3334` local / `3333` service | Server (API + WebSocket + built UI) port      |
+| `WEB_PORT`             | `5280`                  | Vite dev server port (`bun run dev`)                |
+| `WEB_DIST`             | `packages/web/dist`     | Built UI directory the server serves                |
+| `CLAUDE_DASHBOARD_API` | `http://localhost:3334` | Proxy target for the Vite dev server                |
 
 ## Running as a system service
 
@@ -73,6 +90,8 @@ dies, install it as a user-level system service:
 ```bash
 bun run service:install     # macOS → launchd agent; Linux → systemd user unit
 bun run service:uninstall   # remove it
+bun run service:restart     # restart it (picks up latest server code)
+bun run service:update      # rebuild the web UI, then restart the service
 ```
 
 - **macOS** installs a launchd agent (`~/Library/LaunchAgents/com.claude-dashboard.server.plist`)
@@ -82,9 +101,21 @@ bun run service:uninstall   # remove it
   (`~/.config/systemd/user/com.claude-dashboard.server.service`) with `Restart=always`
   (the watchdog) and enables it at login.
 
-The service runs `bun run serve` from the repo, so make sure the UI has been built at
-least once (`bun run build`, or a prior `bun run start`). It listens on `PORT` (default
-`3333`).
+The service runs `bun run serve` **from the repo** (`WorkingDirectory` points at this
+checkout), so it always executes the current code on disk — you do **not** reinstall to
+update it:
+
+- **Changed server code** (`packages/server`): `bun run service:restart` — the restarted
+  process runs the new code immediately.
+- **Changed web UI** (`packages/web`): `bun run service:update` — rebuilds `dist` and
+  restarts. (Just `bun run build` is enough for the *served* assets; restart only matters
+  for server code, so `service:update` does both.)
+- **Only reinstall** (`service:install`) if you moved the repo, changed the port, or edited
+  the service definition itself.
+
+Make sure the UI has been built at least once (`bun run build`, or a prior `bun run
+start`). It listens on port `3333` (set explicitly in the service definition, so it stays
+independent of a local `bun start` on 3334).
 
 ## How session discovery works
 
