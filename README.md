@@ -10,6 +10,14 @@ transcripts from `~/.claude/projects/**/*.jsonl` and cross-references the live p
 table, and a React frontend renders it with live updates over a WebSocket. Nothing is sent
 anywhere else.
 
+## Demo
+
+![Dashboard demo](docs/demo.gif)
+
+The recording above is the real app, driven by [`scripts/record-demo.mjs`](scripts/record-demo.mjs)
+against a live session — nothing staged. Regenerate it with `bun run demo:record` (needs
+Playwright's Chromium — `bunx playwright install chromium` — and a system `ffmpeg`).
+
 ## Stack
 
 - **Bun** — package manager, runtime, and the backend server (`Bun.serve`, no framework)
