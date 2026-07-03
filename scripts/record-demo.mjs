@@ -167,7 +167,8 @@ async function main() {
     console.log("Starting API server and web dev server on isolated ports…");
     serverProc = spawnProcess("bun", ["run", "--cwd", "packages/server", "start"], {
       cwd: ROOT,
-      env: { ...process.env, PORT: String(SERVER_PORT) },
+      // CLAUDE_DASHBOARD_MOCK keeps real ~/.claude sessions and processes out of the recording.
+      env: { ...process.env, PORT: String(SERVER_PORT), CLAUDE_DASHBOARD_MOCK: "1" },
     });
     webProc = spawnProcess("bun", ["run", "--cwd", "packages/web", "dev", "--", "--port", String(WEB_PORT), "--strictPort"], {
       cwd: ROOT,
