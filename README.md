@@ -18,6 +18,15 @@ The recording above is the real app, driven by [`scripts/record-demo.mjs`](scrip
 against a live session — nothing staged. Regenerate it with `bun run demo:record` (needs
 Playwright's Chromium — `bunx playwright install chromium` — and a system `ffmpeg`).
 
+**[Try the live demo →](https://barnuri.github.io/claude-dashboard/)**
+
+GitHub Pages only serves static files, so the live demo can't run the real Bun backend
+or read your `~/.claude/projects` — it's the same UI wired up to realistic sample data
+instead (`VITE_DEMO_MODE=true`, see `packages/web/src/demo/mockData.ts`). A few sessions
+tick along in different states, and "Kill"/"New session" simulate what they'd do for
+real. `.github/workflows/deploy-demo.yml` rebuilds and republishes it on every push to
+`main`. Run it locally against your own machine (below) for the real thing.
+
 ## Stack
 
 - **Bun** — package manager, runtime, and the backend server (`Bun.serve`, no framework)
