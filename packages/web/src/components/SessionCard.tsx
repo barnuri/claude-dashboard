@@ -165,7 +165,7 @@ export function SessionCard({ session, onView, onKill }: Props) {
           </CopyButton>
           <Button
             size="xs"
-            variant="subtle"
+            variant="light"
             color="red"
             disabled={!session.pid}
             leftSection={<IconPlayerStopFilled size={14} />}
