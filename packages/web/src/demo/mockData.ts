@@ -1,4 +1,12 @@
-import { calculateCost, resolveModelPricing, type DashboardSnapshot, type SessionSummary } from "@claude-dashboard/shared";
+import {
+  calculateCost,
+  resolveModelPricing,
+  STATS_PERIODS,
+  type DashboardSnapshot,
+  type PeriodStats,
+  type SessionSummary,
+  type StatsPeriod,
+} from "@claude-dashboard/shared";
 import type { FeedResponse } from "../api/client";
 
 const now = () => Date.now();
@@ -180,7 +188,24 @@ function buildSnapshot(): DashboardSnapshot {
     }
   );
 
-  return { generatedAt: new Date().toISOString(), sessions, totals };
+  // All mock sessions "started" within the last few hours, so every rolling window
+  // (24h/7d/14d/30d/all) sees the same activity — good enough for a static demo.
+  const statsByPeriod = Object.fromEntries(
+    STATS_PERIODS.map((period): [StatsPeriod, PeriodStats] => [
+      period,
+      {
+        period,
+        sessionCount: totals.sessionCount,
+        totalCostUsd: totals.totalCostUsd,
+        totalInputTokens: totals.totalInputTokens,
+        totalOutputTokens: totals.totalOutputTokens,
+        totalCacheReadTokens: totals.totalCacheReadTokens,
+        totalCacheCreationTokens: totals.totalCacheCreationTokens,
+      },
+    ])
+  ) as Record<StatsPeriod, PeriodStats>;
+
+  return { generatedAt: new Date().toISOString(), sessions, totals, statsByPeriod };
 }
 
 const DEMO_FEED: FeedResponse["feed"] = [
