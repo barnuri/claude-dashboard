@@ -15,9 +15,13 @@
     "service:install": "bun run scripts/service.ts install",
     "service:uninstall": "bun run scripts/service.ts uninstall",
     "test": "bun test",
-    "typecheck": "bun run --filter='*' typecheck && tsc -p tsconfig.json"
+    "typecheck": "bun run --filter='*' typecheck && tsc -p tsconfig.json",
+    "demo:record": "bun scripts/record-demo.mjs"
   },
   "engines": {
     "bun": ">=1.1.0"
+  },
+  "devDependencies": {
+    "playwright": "1.56.1"
   }
 }
