@@ -93,10 +93,29 @@ export interface DashboardTotals {
   totalCacheCreationTokens: number;
 }
 
+/** Rolling time windows the stats header can be scoped to. */
+export type StatsPeriod = "24h" | "7d" | "14d" | "30d" | "all";
+
+export const STATS_PERIODS: readonly StatsPeriod[] = ["24h", "7d", "14d", "30d", "all"];
+
+/** Usage/cost aggregated over a single time window. */
+export interface PeriodStats {
+  period: StatsPeriod;
+  /** Sessions with at least one assistant turn inside the window. */
+  sessionCount: number;
+  totalCostUsd: number;
+  totalInputTokens: number;
+  totalOutputTokens: number;
+  totalCacheReadTokens: number;
+  totalCacheCreationTokens: number;
+}
+
 export interface DashboardSnapshot {
   generatedAt: string;
   sessions: SessionSummary[];
   totals: DashboardTotals;
+  /** Per-window aggregates, keyed by period, so the client can switch windows without a round-trip. */
+  statsByPeriod: Record<StatsPeriod, PeriodStats>;
 }
 
 export type ServerEvent =

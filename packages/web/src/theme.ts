@@ -19,8 +19,9 @@ export const vizColors = {
   status: {
     good: "#0ca30c", // running
     warning: "#fab219", // waiting on user
-    serious: "#ec835a",
-    critical: "#d03b3b", // errored tool call
+    serious: "#ec835a", // context pressure high
+    critical: "#d03b3b", // errored tool call / context at limit
+    ended: "#5a6b7d", // finished session — calm slate-blue, distinct from muted idle
   },
 };
 

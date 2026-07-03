@@ -10,8 +10,12 @@
     "dev:server": "bun run --cwd packages/server dev",
     "dev:web": "bun run --cwd packages/web dev",
     "build": "bun run --cwd packages/web build",
-    "start": "bun run --cwd packages/server start",
-    "typecheck": "bun run --filter='*' typecheck"
+    "start": "bun run scripts/start.ts",
+    "serve": "bun run --cwd packages/server start",
+    "service:install": "bun run scripts/service.ts install",
+    "service:uninstall": "bun run scripts/service.ts uninstall",
+    "test": "bun test",
+    "typecheck": "bun run --filter='*' typecheck && tsc -p tsconfig.json"
   },
   "engines": {
     "bun": ">=1.1.0"
