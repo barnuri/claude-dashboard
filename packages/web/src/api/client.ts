@@ -6,6 +6,8 @@ import type {
   TranscriptFeedItem,
 } from "@claude-dashboard/shared";
 
+export const DEMO_MODE = import.meta.env.VITE_DEMO_MODE === "true";
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, {
     ...init,
@@ -18,23 +20,42 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-export function fetchSnapshot(): Promise<DashboardSnapshot> {
-  return request<DashboardSnapshot>("/api/snapshot");
-}
-
 export interface FeedResponse {
   session: DashboardSnapshot["sessions"][number];
   feed: TranscriptFeedItem[];
 }
 
-export function fetchFeed(id: string, limit = 80): Promise<FeedResponse> {
+export async function fetchSnapshot(): Promise<DashboardSnapshot> {
+  if (DEMO_MODE) {
+    const { demoStore } = await import("../demo/mockData");
+    return demoStore.getSnapshot();
+  }
+  return request<DashboardSnapshot>("/api/snapshot");
+}
+
+export async function fetchFeed(id: string, limit = 80): Promise<FeedResponse> {
+  if (DEMO_MODE) {
+    const { demoStore } = await import("../demo/mockData");
+    return demoStore.getFeed(id);
+  }
   return request<FeedResponse>(`/api/sessions/feed?id=${encodeURIComponent(id)}&limit=${limit}`);
 }
 
-export function createSession(body: CreateSessionRequest): Promise<CreateSessionResponse> {
+export async function createSession(body: CreateSessionRequest): Promise<CreateSessionResponse> {
+  if (DEMO_MODE) {
+    const { demoStore } = await import("../demo/mockData");
+    await new Promise((r) => setTimeout(r, 400));
+    return demoStore.launch(body.cwd, body.prompt, body.model);
+  }
   return request<CreateSessionResponse>("/api/sessions", { method: "POST", body: JSON.stringify(body) });
 }
 
-export function killSession(pid: number, force = false): Promise<KillSessionResponse> {
+export async function killSession(pid: number, force = false): Promise<KillSessionResponse> {
+  if (DEMO_MODE) {
+    const { demoStore } = await import("../demo/mockData");
+    await new Promise((r) => setTimeout(r, 200));
+    demoStore.kill(pid);
+    return { ok: true, pid, signal: force ? "SIGKILL" : "SIGTERM" };
+  }
   return request<KillSessionResponse>("/api/kill", { method: "POST", body: JSON.stringify({ pid, force }) });
 }

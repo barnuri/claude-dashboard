@@ -3,7 +3,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Alert, Button, Modal, Select, Stack, Textarea, TextInput } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { IconAlertTriangle, IconRocket } from "@tabler/icons-react";
-import { createSession } from "../api/client";
+import { createSession, DEMO_MODE } from "../api/client";
 import { SNAPSHOT_QUERY_KEY } from "../api/queryKeys";
 
 interface Props {
@@ -37,8 +37,10 @@ export function NewSessionModal({ opened, onClose, recentDirs }: Props) {
     mutationFn: () => createSession({ cwd, prompt, model: model || undefined, permissionMode: permissionMode as any }),
     onSuccess: (res) => {
       notifications.show({
-        title: "Session launched",
-        message: `claude is running in ${res.cwd} (pid ${res.pid}). It will appear once it starts writing output.`,
+        title: DEMO_MODE ? "Session launched (simulated)" : "Session launched",
+        message: DEMO_MODE
+          ? `Added a simulated session for ${res.cwd} to the list.`
+          : `claude is running in ${res.cwd} (pid ${res.pid}). It will appear once it starts writing output.`,
         color: "green",
       });
       queryClient.invalidateQueries({ queryKey: SNAPSHOT_QUERY_KEY });

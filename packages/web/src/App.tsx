@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ActionIcon,
+  Alert,
   AppShell,
   Badge,
   Button,
@@ -15,9 +16,9 @@ import {
   Tooltip,
 } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
-import { IconPlus, IconRefresh, IconSearch, IconTerminal } from "@tabler/icons-react";
+import { IconInfoCircle, IconPlus, IconRefresh, IconSearch, IconTerminal } from "@tabler/icons-react";
 import type { SessionSummary, SessionStatus } from "@claude-dashboard/shared";
-import { fetchSnapshot, killSession } from "./api/client";
+import { DEMO_MODE, fetchSnapshot, killSession } from "./api/client";
 import { SNAPSHOT_QUERY_KEY } from "./api/queryKeys";
 import { useDashboardSocket } from "./api/useDashboardSocket";
 import { StatsHeader } from "./components/StatsHeader";
@@ -53,7 +54,8 @@ export default function App() {
 
   function handleKill(session: SessionSummary) {
     if (!session.pid) return;
-    const ok = window.confirm(`Kill the Claude Code process (pid ${session.pid}) running in ${session.cwd}?`);
+    const verb = DEMO_MODE ? "Simulate killing" : "Kill";
+    const ok = window.confirm(`${verb} the Claude Code process (pid ${session.pid}) running in ${session.cwd}?`);
     if (ok) killMutation.mutate(session);
   }
 
@@ -102,6 +104,19 @@ export default function App() {
       </AppShell.Header>
 
       <AppShell.Main>
+        {DEMO_MODE && (
+          <Alert
+            icon={<IconInfoCircle size={16} />}
+            color="blue"
+            variant="light"
+            mb="md"
+            title="You're viewing a static demo"
+          >
+            This build has no real backend — it's driven by sample data so you can click around.
+            "Kill" and "New session" simulate what the real app does. Run it locally against your
+            own `~/.claude/projects` for the real thing — see the README.
+          </Alert>
+        )}
         {data && <StatsHeader totals={data.totals} />}
 
         <Group justify="space-between" mt="lg" mb="sm">
