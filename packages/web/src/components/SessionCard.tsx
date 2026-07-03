@@ -1,9 +1,11 @@
 import { Badge, Box, Button, Card, Group, Progress, Stack, Text, Tooltip } from "@mantine/core";
 import { IconCopy, IconEye, IconGitBranch, IconPlayerStopFilled } from "@tabler/icons-react";
+import type { MouseEvent } from "react";
 import type { SessionSummary } from "@claude-dashboard/shared";
 import { StatusBadge } from "./StatusBadge";
 import { actionIcon } from "./actionIcons";
 import { basename, formatRelativeTime, formatTokens, formatUsd } from "../utils/format";
+import { deriveSessionHealth } from "../utils/sessionHealth";
 import { vizColors } from "../theme";
 
 interface Props {
@@ -13,14 +15,39 @@ interface Props {
 }
 
 export function SessionCard({ session, onView, onKill }: Props) {
+  const health = deriveSessionHealth(session);
+
   const contextPct = session.usage.contextLimit
     ? Math.min(100, (session.usage.contextTokens / session.usage.contextLimit) * 100)
     : 0;
   const contextColor =
     contextPct > 85 ? vizColors.status.critical : contextPct > 60 ? vizColors.status.warning : vizColors.series.blue;
 
+  function stop(handler: () => void) {
+    return (e: MouseEvent) => {
+      e.stopPropagation();
+      handler();
+    };
+  }
+
   return (
-    <Card padding="md">
+    <Card
+      padding="md"
+      onClick={() => onView(session)}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onView(session);
+        }
+      }}
+      style={{
+        cursor: "pointer",
+        borderLeft: `4px solid ${health.color}`,
+        opacity: health.dimmed ? 0.62 : 1,
+      }}
+    >
       <Stack gap="xs">
         <Group justify="space-between" wrap="nowrap">
           <Tooltip label={session.cwd} openDelay={300}>
@@ -28,7 +55,7 @@ export function SessionCard({ session, onView, onKill }: Props) {
               {basename(session.cwd)}
             </Text>
           </Tooltip>
-          <StatusBadge status={session.status} />
+          <StatusBadge status={session.status} label={health.label} color={health.color} />
         </Group>
 
         <Group gap={6} wrap="wrap">
@@ -83,14 +110,16 @@ export function SessionCard({ session, onView, onKill }: Props) {
         </Group>
 
         <Group grow gap="xs" mt={4}>
-          <Button size="xs" variant="light" leftSection={<IconEye size={14} />} onClick={() => onView(session)}>
+          <Button size="xs" variant="light" leftSection={<IconEye size={14} />} onClick={stop(() => onView(session))}>
             View
           </Button>
           <Button
             size="xs"
             variant="light"
             leftSection={<IconCopy size={14} />}
-            onClick={() => navigator.clipboard.writeText(`claude --resume ${session.id}`)}
+            onClick={stop(() => {
+              void navigator.clipboard.writeText(`claude --resume ${session.id}`);
+            })}
           >
             Resume
           </Button>
@@ -100,7 +129,7 @@ export function SessionCard({ session, onView, onKill }: Props) {
             color="red"
             disabled={!session.pid}
             leftSection={<IconPlayerStopFilled size={14} />}
-            onClick={() => onKill(session)}
+            onClick={stop(() => onKill(session))}
           >
             Kill
           </Button>

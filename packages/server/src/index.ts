@@ -1,9 +1,10 @@
 import type { CreateSessionRequest, ServerEvent } from "@claude-dashboard/shared";
-import { PORT, POLL_INTERVAL_MS } from "./config";
+import { PORT, POLL_INTERVAL_MS, WEB_DIST } from "./config";
 import { buildDashboardSnapshot } from "./sessions";
 import { getTranscriptFeed } from "./transcript";
 import { killProcess } from "./processes";
 import { launchSession, LaunchError } from "./launch";
+import { StaticFileServer } from "./static";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -19,6 +20,8 @@ function json(data: unknown, status = 200): Response {
 }
 
 const sockets = new Set<import("bun").ServerWebSocket<unknown>>();
+
+const staticServer = new StaticFileServer(WEB_DIST);
 
 function broadcast(event: ServerEvent) {
   const payload = JSON.stringify(event);
@@ -94,6 +97,17 @@ const server = Bun.serve({
         return json({ ok: outcome === "killed", pid: body.pid, signal: body.force ? "SIGKILL" : "SIGTERM", outcome });
       } catch (err) {
         return json({ error: String(err) }, 500);
+      }
+    }
+
+    if (url.pathname.startsWith("/api/")) {
+      return json({ error: "not found" }, 404);
+    }
+
+    if (req.method === "GET" && staticServer.hasRoot()) {
+      const response = await staticServer.serve(url.pathname);
+      if (response) {
+        return response;
       }
     }
 

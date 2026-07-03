@@ -26,19 +26,57 @@ bun install
 bun run dev
 ```
 
-This starts the API server on `http://localhost:4317` and the Vite dev server on
-`http://localhost:5173` (which proxies `/api` and `/ws` to the backend). Open
-`http://localhost:5173`.
+This starts the API server on `http://localhost:3333` and the Vite dev server on
+`http://localhost:5280` (which proxies `/api` and `/ws` to the backend). Open
+`http://localhost:5280`.
 
-For a production-style run:
+For a production-style run, use a single command:
 
 ```bash
-bun run build          # builds packages/web/dist
-bun run start           # starts the API server only, on :4317
+bun run start
 ```
 
-(Point any static file server at `packages/web/dist`, or extend `packages/server` to
-serve it — the API and the static site don't have to live on the same port.)
+`bun run start` is self-contained:
+
+- Builds the web UI first if `packages/web/dist` is missing or stale.
+- Serves the built UI **and** the API/WebSocket from the same server on
+  `http://localhost:3333` — open that URL directly.
+- Watches both sides while it runs: server-source edits restart the server
+  (`bun --watch`), and client-source edits rebuild `packages/web/dist`
+  (`vite build --watch`), which the running server then serves.
+
+`bun run serve` is also available if you only want the server (no build, no watchers) —
+this is what the system service runs.
+
+Ports and paths are overridable via environment variables:
+
+| Variable             | Default              | Purpose                                  |
+| -------------------- | -------------------- | ---------------------------------------- |
+| `PORT`               | `3333`               | Server (API + WebSocket + built UI) port |
+| `WEB_PORT`           | `5280`               | Vite dev server port (`bun run dev`)     |
+| `WEB_DIST`           | `packages/web/dist`  | Built UI directory the server serves     |
+| `CLAUDE_DASHBOARD_API` | `http://localhost:3333` | Proxy target for the Vite dev server  |
+
+## Running as a system service
+
+To keep the dashboard running on boot/login with a watchdog that restarts it if it ever
+dies, install it as a user-level system service:
+
+```bash
+bun run service:install     # macOS → launchd agent; Linux → systemd user unit
+bun run service:uninstall   # remove it
+```
+
+- **macOS** installs a launchd agent (`~/Library/LaunchAgents/com.claude-dashboard.server.plist`)
+  with `RunAtLoad` (starts at login) and `KeepAlive` (the watchdog — relaunched whenever it
+  exits). Logs go to `~/.claude-dashboard/logs/service.{out,err}.log`.
+- **Linux** installs a systemd user unit
+  (`~/.config/systemd/user/com.claude-dashboard.server.service`) with `Restart=always`
+  (the watchdog) and enables it at login.
+
+The service runs `bun run serve` from the repo, so make sure the UI has been built at
+least once (`bun run build`, or a prior `bun run start`). It listens on `PORT` (default
+`3333`).
 
 ## How session discovery works
 
@@ -82,7 +120,7 @@ claude --resume <session-id>
   a full interactive TTY into the browser. Use `claude --resume <id>` in a real terminal
   for that.
 - **Local, single-user, no auth.** It binds to `localhost` and assumes you're the only
-  one who can reach it. Don't expose port 4317 or 5173 to a network you don't trust.
+  one who can reach it. Don't expose port 3333 or 5280 to a network you don't trust.
 - **Best-effort process matching.** If two terminals are `cd`'d into the exact same
   directory, the dashboard does its best to pair each live process with the most
   recently active transcript in that directory, but it's a heuristic, not a guarantee.

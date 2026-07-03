@@ -10,6 +10,7 @@ import {
 import { PROJECTS_DIR } from "./config";
 import { parseTranscriptFile } from "./transcript";
 import { listClaudeProcesses } from "./processes";
+import { PeriodStatsBuilder } from "./stats";
 
 /** Best-effort decode of a Claude Code project directory name back into an absolute path. */
 function decodeProjectDirName(dirName: string): string {
@@ -186,5 +187,15 @@ export async function buildDashboardSnapshot(): Promise<DashboardSnapshot> {
     }
   );
 
-  return { generatedAt: new Date().toISOString(), sessions, totals };
+  const statsBuilder = new PeriodStatsBuilder();
+  for (const { parsed } of parsedByFile) {
+    statsBuilder.addSession(parsed.sessionId, parsed.turns);
+  }
+
+  return {
+    generatedAt: new Date().toISOString(),
+    sessions,
+    totals,
+    statsByPeriod: statsBuilder.build(),
+  };
 }

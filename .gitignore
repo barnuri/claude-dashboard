@@ -6,3 +6,6 @@ build/
 .env
 .env.local
 *.tsbuildinfo
+**/agent-spec
+.retrospect
+.playwright-mcp/

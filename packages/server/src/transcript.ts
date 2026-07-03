@@ -1,6 +1,17 @@
 import { readFileSync, statSync } from "node:fs";
 import type { LastAction, TranscriptFeedItem } from "@claude-dashboard/shared";
 
+/** Usage recorded for a single assistant turn, tagged with its timestamp and model. */
+export interface TurnUsage {
+  at: string;
+  model: string | null;
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  cacheCreation5m: number;
+  cacheCreation1h: number;
+}
+
 export interface ParsedTranscript {
   sessionId: string;
   cwd: string | null;
@@ -20,6 +31,8 @@ export interface ParsedTranscript {
     cacheCreation5m: number;
     cacheCreation1h: number;
   };
+  /** Per-turn timestamped usage, used to aggregate cost/tokens over time windows. */
+  turns: TurnUsage[];
   /** Total input tokens attributed to the single most recent assistant turn — used as the "context used" estimate. */
   lastTurnContextTokens: number;
 }
@@ -159,6 +172,7 @@ export function parseTranscriptFile(filePath: string, fallbackId: string): Parse
   let cacheCreation1h = 0;
   let lastTurnContextTokens = 0;
   let messageCount = 0;
+  const turns: TurnUsage[] = [];
 
   for (const line of lines) {
     let entry: any;
@@ -201,6 +215,15 @@ export function parseTranscriptFile(filePath: string, fallbackId: string): Parse
           cacheCreation5m += c5m;
           cacheCreation1h += c1h;
           lastTurnContextTokens = inTok + cacheRead + c5m + c1h;
+          turns.push({
+            at: typeof entry.timestamp === "string" ? entry.timestamp : new Date(0).toISOString(),
+            model: typeof msg?.model === "string" ? msg.model : null,
+            inputTokens: inTok,
+            outputTokens: outTok,
+            cacheReadTokens: cacheRead,
+            cacheCreation5m: c5m,
+            cacheCreation1h: c1h,
+          });
         }
       }
 
@@ -240,6 +263,7 @@ export function parseTranscriptFile(filePath: string, fallbackId: string): Parse
       cacheCreation5m,
       cacheCreation1h,
     },
+    turns,
     lastTurnContextTokens,
   };
 
