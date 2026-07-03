@@ -12,22 +12,22 @@
   },
   "dependencies": {
     "@claude-dashboard/shared": "workspace:*",
-    "@mantine/charts": "^8.3.4",
-    "@mantine/core": "^8.3.4",
-    "@mantine/hooks": "^8.3.4",
-    "@mantine/notifications": "^8.3.4",
-    "@tabler/icons-react": "^3.35.0",
-    "@tanstack/react-query": "^5.90.5",
-    "dayjs": "^1.11.19",
-    "react": "^19.2.0",
-    "react-dom": "^19.2.0",
-    "recharts": "^2.15.4"
+    "@mantine/charts": "^9.4.1",
+    "@mantine/core": "^9.4.1",
+    "@mantine/hooks": "^9.4.1",
+    "@mantine/notifications": "^9.4.1",
+    "@tabler/icons-react": "^3.44.0",
+    "@tanstack/react-query": "^5.101.2",
+    "dayjs": "^1.11.21",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "recharts": "^3.9.1"
   },
   "devDependencies": {
-    "@types/react": "^19.2.2",
-    "@types/react-dom": "^19.2.1",
-    "@vitejs/plugin-react": "^5.0.4",
-    "typescript": "^5.9.3",
-    "vite": "^7.1.12"
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.3",
+    "typescript": "^6.0.3",
+    "vite": "^8.1.3"
   }
 }

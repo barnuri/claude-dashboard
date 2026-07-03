@@ -17,6 +17,7 @@ import {
     Tooltip,
 } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
+import { useLocalStorage } from "@mantine/hooks";
 import {
     IconInfoCircle,
     IconPlus,
@@ -43,9 +44,21 @@ type FilterOption = "all" | "active" | "ended";
 
 export default function App() {
     const [search, setSearch] = useState("");
-    const [filter, setFilter] = useState<FilterOption>("active");
-    const [period, setPeriod] = useState<StatsPeriod>("7d");
-    const [endedWindowHours, setEndedWindowHours] = useState(4);
+    const [filter, setFilter] = useLocalStorage<FilterOption>({
+        key: "claude-dashboard:filter",
+        defaultValue: "active",
+        getInitialValueInEffect: false,
+    });
+    const [period, setPeriod] = useLocalStorage<StatsPeriod>({
+        key: "claude-dashboard:stats-period",
+        defaultValue: "7d",
+        getInitialValueInEffect: false,
+    });
+    const [endedWindowHours, setEndedWindowHours] = useLocalStorage<number>({
+        key: "claude-dashboard:ended-window-hours",
+        defaultValue: 4,
+        getInitialValueInEffect: false,
+    });
     const [selected, setSelected] = useState<SessionSummary | null>(null);
     const [newSessionOpen, setNewSessionOpen] = useState(false);
     const queryClient = useQueryClient();
