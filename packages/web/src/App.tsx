@@ -18,6 +18,7 @@ import {
 } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import {
+    IconInfoCircle,
     IconPlus,
     IconRefresh,
     IconSearch,
@@ -28,15 +29,6 @@ import type {
     SessionStatus,
     StatsPeriod,
 } from "@claude-dashboard/shared";
-import { fetchSnapshot, killSession } from "./api/client";
-import {
-    IconInfoCircle,
-    IconPlus,
-    IconRefresh,
-    IconSearch,
-    IconTerminal,
-} from "@tabler/icons-react";
-import type { SessionSummary, SessionStatus } from "@claude-dashboard/shared";
 import { DEMO_MODE, fetchSnapshot, killSession } from "./api/client";
 import { SNAPSHOT_QUERY_KEY } from "./api/queryKeys";
 import { useDashboardSocket } from "./api/useDashboardSocket";

@@ -109,6 +109,26 @@ WantedBy=default.target
         throw new Error(`Unsupported platform for service uninstall: ${this.os}`);
     }
 
+    /**
+     * Restart the running service so it picks up the latest code on disk. The service runs
+     * from the repo, so a code change only needs the server restarted (and the web UI
+     * rebuilt if the client changed) — not a full reinstall.
+     */
+    async restart(): Promise<void> {
+        if (this.os === "darwin") {
+            const uid = process.getuid?.() ?? 0;
+            await this.runLaunchctl(["kickstart", "-k", `gui/${uid}/${ServiceManager.LABEL}`], false);
+            console.log("[service] restarted launchd agent");
+            return;
+        }
+        if (this.os === "linux") {
+            await this.runSystemctl(["restart", `${ServiceManager.LABEL}.service`]);
+            console.log("[service] restarted systemd unit");
+            return;
+        }
+        throw new Error(`Unsupported platform for service restart: ${this.os}`);
+    }
+
     private launchdPlistPath(): string {
         return join(homedir(), "Library", "LaunchAgents", `${ServiceManager.LABEL}.plist`);
     }
@@ -175,8 +195,8 @@ WantedBy=default.target
 
 const action = process.argv[2];
 if (import.meta.main) {
-    if (action !== "install" && action !== "uninstall") {
-        console.error("usage: bun run scripts/service.ts <install|uninstall>");
+    if (action !== "install" && action !== "uninstall" && action !== "restart") {
+        console.error("usage: bun run scripts/service.ts <install|uninstall|restart>");
         process.exit(1);
     }
 
@@ -188,7 +208,9 @@ if (import.meta.main) {
 
     if (action === "install") {
         await manager.install();
-    } else {
+    } else if (action === "uninstall") {
         await manager.uninstall();
+    } else {
+        await manager.restart();
     }
 }

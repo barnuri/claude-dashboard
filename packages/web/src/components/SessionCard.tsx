@@ -6,6 +6,7 @@ import { StatusBadge } from "./StatusBadge";
 import { actionIcon } from "./actionIcons";
 import { basename, formatRelativeTime, formatTokens, formatUsd } from "../utils/format";
 import { deriveSessionHealth } from "../utils/sessionHealth";
+import { folderColor } from "../utils/folderColor";
 import { vizColors } from "../theme";
 
 interface Props {
@@ -51,12 +52,18 @@ export function SessionCard({ session, onView, onKill }: Props) {
       <Stack gap="xs">
         <Group justify="space-between" wrap="nowrap">
           <Tooltip label={session.cwd} openDelay={300}>
-            <Text fw={600} truncate style={{ maxWidth: 220 }}>
+            <Text fw={600} truncate style={{ maxWidth: 220, color: folderColor(session.cwd) }}>
               {basename(session.cwd)}
             </Text>
           </Tooltip>
           <StatusBadge status={session.status} label={health.label} color={health.color} />
         </Group>
+
+        {session.title && (
+          <Text size="sm" fw={500} lineClamp={1} title={session.title}>
+            {session.title}
+          </Text>
+        )}
 
         <Group gap={6} wrap="wrap">
           {session.model && (

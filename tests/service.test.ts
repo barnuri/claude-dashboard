@@ -68,4 +68,9 @@ describe("ServiceManager platform guards", () => {
         const manager = new ServiceManager(paths, "win32");
         await expect(manager.uninstall()).rejects.toThrow(/Unsupported platform/);
     });
+
+    test("restart rejects an unsupported platform", async () => {
+        const manager = new ServiceManager(paths, "win32");
+        await expect(manager.restart()).rejects.toThrow(/Unsupported platform/);
+    });
 });

@@ -10,6 +10,7 @@ function makeSession(overrides: Partial<SessionSummary> = {}): SessionSummary {
     gitBranch: null,
     model: "claude-opus-4-8",
     cliVersion: null,
+    title: null,
     startedAt: null,
     lastActivityAt: new Date(0).toISOString(),
     status: "running",

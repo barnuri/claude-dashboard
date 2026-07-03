@@ -90,6 +90,8 @@ dies, install it as a user-level system service:
 ```bash
 bun run service:install     # macOS → launchd agent; Linux → systemd user unit
 bun run service:uninstall   # remove it
+bun run service:restart     # restart it (picks up latest server code)
+bun run service:update      # rebuild the web UI, then restart the service
 ```
 
 - **macOS** installs a launchd agent (`~/Library/LaunchAgents/com.claude-dashboard.server.plist`)
@@ -99,10 +101,21 @@ bun run service:uninstall   # remove it
   (`~/.config/systemd/user/com.claude-dashboard.server.service`) with `Restart=always`
   (the watchdog) and enables it at login.
 
-The service runs `bun run serve` from the repo, so make sure the UI has been built at
-least once (`bun run build`, or a prior `bun run start`). It listens on port `3333` (set
-explicitly in the service definition, so it stays independent of a local `bun start` on
-3334).
+The service runs `bun run serve` **from the repo** (`WorkingDirectory` points at this
+checkout), so it always executes the current code on disk — you do **not** reinstall to
+update it:
+
+- **Changed server code** (`packages/server`): `bun run service:restart` — the restarted
+  process runs the new code immediately.
+- **Changed web UI** (`packages/web`): `bun run service:update` — rebuilds `dist` and
+  restarts. (Just `bun run build` is enough for the *served* assets; restart only matters
+  for server code, so `service:update` does both.)
+- **Only reinstall** (`service:install`) if you moved the repo, changed the port, or edited
+  the service definition itself.
+
+Make sure the UI has been built at least once (`bun run build`, or a prior `bun run
+start`). It listens on port `3333` (set explicitly in the service definition, so it stays
+independent of a local `bun start` on 3334).
 
 ## How session discovery works
 
