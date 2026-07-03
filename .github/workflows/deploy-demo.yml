@@ -2,7 +2,8 @@ name: Deploy demo to GitHub Pages
 
 on:
   push:
-    branches: [main, master]
+    branches: 
+      - master
     paths:
       - "packages/web/**"
       - "packages/shared/**"
