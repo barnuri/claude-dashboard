@@ -11,9 +11,13 @@
     "dev:web": "bun run --cwd packages/web dev",
     "build": "bun run --cwd packages/web build",
     "start": "bun run --cwd packages/server start",
-    "typecheck": "bun run --filter='*' typecheck"
+    "typecheck": "bun run --filter='*' typecheck",
+    "demo:record": "bun scripts/record-demo.mjs"
   },
   "engines": {
     "bun": ">=1.1.0"
+  },
+  "devDependencies": {
+    "playwright": "1.56.1"
   }
 }
