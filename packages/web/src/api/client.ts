@@ -50,6 +50,10 @@ export async function createSession(body: CreateSessionRequest): Promise<CreateS
   return request<CreateSessionResponse>("/api/sessions", { method: "POST", body: JSON.stringify(body) });
 }
 
+export function logStreamUrl(id: string): string {
+  return `/api/sessions/log-stream?id=${encodeURIComponent(id)}`;
+}
+
 export async function killSession(pid: number, force = false): Promise<KillSessionResponse> {
   if (DEMO_MODE) {
     const { demoStore } = await import("../demo/mockData");

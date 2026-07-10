@@ -1,10 +1,11 @@
 import type { CreateSessionRequest, ServerEvent } from "@claude-dashboard/shared";
-import { PORT, POLL_INTERVAL_MS, WEB_DIST, MOCK_MODE } from "./config";
+import { PORT, HOST, POLL_INTERVAL_MS, WEB_DIST, MOCK_MODE } from "./config";
 import { buildDashboardSnapshot } from "./sessions";
 import { getTranscriptFeed } from "./transcript";
 import { MockDataProvider } from "./mock";
 import { killProcess } from "./processes";
 import { launchSession, LaunchError } from "./launch";
+import { createLogStreamResponse } from "./logStream";
 import { StaticFileServer } from "./static";
 
 const CORS_HEADERS = {
@@ -54,6 +55,7 @@ setInterval(pollAndBroadcast, POLL_INTERVAL_MS);
 
 const server = Bun.serve({
   port: PORT,
+  hostname: HOST,
   idleTimeout: 0,
   async fetch(req, server) {
     const url = new URL(req.url);
@@ -81,6 +83,16 @@ const server = Bun.serve({
       if (!session) return json({ error: "session not found" }, 404);
       const feed = mockData ? mockData.getFeed(session.id, limit) : getTranscriptFeed(session.transcriptPath, limit);
       return json({ session, feed });
+    }
+
+    if (url.pathname === "/api/sessions/log-stream" && req.method === "GET") {
+      const id = url.searchParams.get("id");
+      if (!id) return json({ error: "id query param is required" }, 400);
+      const snapshot = await getSnapshot();
+      const session = snapshot.sessions.find((s) => s.id === id);
+      if (!session) return json({ error: "session not found" }, 404);
+      if (!session.logPath) return json({ error: "no live output available for this session" }, 404);
+      return createLogStreamResponse(session.logPath);
     }
 
     if (url.pathname === "/api/sessions" && req.method === "POST") {
@@ -136,4 +148,4 @@ const server = Bun.serve({
   },
 });
 
-console.log(`claude-dashboard server listening on http://localhost:${server.port}`);
+console.log(`claude-dashboard server listening on http://${HOST}:${server.port}`);

@@ -20,6 +20,7 @@ import { feedQueryKey } from "../api/queryKeys";
 import { StatusBadge } from "./StatusBadge";
 import { ContextMeter } from "./ContextMeter";
 import { actionIcon } from "./actionIcons";
+import { LiveOutputPanel } from "./LiveOutputPanel";
 import { basename, formatRelativeTime, formatTokens, formatUsd } from "../utils/format";
 import { vizColors } from "../theme";
 
@@ -188,6 +189,9 @@ export function SessionDetailDrawer({ session, onClose, onKill }: Props) {
                 ))}
             </Timeline>
           </ScrollArea.Autosize>
+
+          <Divider label="Live output" labelPosition="left" />
+          <LiveOutputPanel sessionId={live.id} logPath={live.logPath} />
         </Stack>
       )}
     </Drawer>

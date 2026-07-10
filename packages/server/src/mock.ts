@@ -281,6 +281,7 @@ export class MockDataProvider {
       messageCount: spec.turnCount,
       transcriptPath: `/home/dev/.claude/projects${spec.cwd.replace(/\//g, "-")}/${spec.id}.jsonl`,
       hasPendingPermissionRequest: false,
+      logPath: null,
     };
   }
 

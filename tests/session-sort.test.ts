@@ -28,6 +28,7 @@ function makeSession(overrides: Partial<SessionSummary> = {}): SessionSummary {
     messageCount: 0,
     transcriptPath: "/tmp/project/s.jsonl",
     hasPendingPermissionRequest: false,
+    logPath: null,
     ...overrides,
   };
 }

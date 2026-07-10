@@ -60,6 +60,8 @@ export interface SessionSummary {
   transcriptPath: string;
   /** True if the assistant is mid-turn awaiting more model output (best-effort). */
   hasPendingPermissionRequest: boolean;
+  /** Path to this session's live output log, if it was launched via the dashboard's "New session" flow; null otherwise. */
+  logPath: string | null;
 }
 
 export interface TranscriptFeedItem extends LastAction {

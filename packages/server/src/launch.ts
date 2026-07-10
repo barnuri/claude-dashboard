@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { CreateSessionRequest, CreateSessionResponse } from "@claude-dashboard/shared";
+import { registerLaunchedLog } from "./logRegistry";
 
 const LOG_DIR = join(homedir(), ".claude-dashboard", "logs");
 
@@ -41,6 +42,7 @@ export async function launchSession(req: CreateSessionRequest): Promise<CreateSe
   }
 
   proc.unref();
+  registerLaunchedLog(proc.pid, logPath, cwd);
 
   return { pid: proc.pid, cwd, logPath };
 }

@@ -7,10 +7,11 @@ import {
   type SessionStatus,
   type SessionSummary,
 } from "@claude-dashboard/shared";
-import { PROJECTS_DIR } from "./config";
+import { PROJECTS_DIR, WAITING_INPUT_GRACE_MS } from "./config";
 import { parseTranscriptFile } from "./transcript";
 import { listClaudeProcesses } from "./processes";
 import { PeriodStatsBuilder } from "./stats";
+import { getLogPathForPid, pruneDeadLogEntries } from "./logRegistry";
 
 /** Best-effort decode of a Claude Code project directory name back into an absolute path. */
 function decodeProjectDirName(dirName: string): string {
@@ -62,9 +63,25 @@ function listTranscriptFiles(): TranscriptFile[] {
   return files;
 }
 
-function deriveStatus(hasLivePid: boolean, turnComplete: boolean): SessionStatus {
+/**
+ * A transcript line that merely *looks* like a finished turn doesn't mean the session is
+ * actually waiting on the user yet — compaction, subagent/hook activity, or write lag can make
+ * a still-busy session look done for a moment. Report "idle" during a short grace window after
+ * the apparent turn-complete point, and only escalate to "waiting_input" once that window has
+ * passed with no further transcript activity.
+ */
+export function deriveStatus(
+  hasLivePid: boolean,
+  turnComplete: boolean,
+  lastActivityAt: string | null,
+  now: number
+): SessionStatus {
   if (!hasLivePid) return "ended";
-  return turnComplete ? "waiting_input" : "running";
+  if (!turnComplete) return "running";
+  if (!lastActivityAt) return "waiting_input";
+
+  const elapsedMs = now - Date.parse(lastActivityAt);
+  return elapsedMs < WAITING_INPUT_GRACE_MS ? "idle" : "waiting_input";
 }
 
 const MAX_SESSIONS = 300;
@@ -111,6 +128,9 @@ export async function buildDashboardSnapshot(): Promise<DashboardSnapshot> {
     }
   }
 
+  pruneDeadLogEntries(new Set(processes.map((p) => p.pid)));
+
+  const now = Date.now();
   const sessions: SessionSummary[] = parsedByFile.map(({ tf, parsed }) => {
     const pid = pidByFilePath.get(tf.filePath) ?? null;
     const pricing = resolveModelPricing(parsed.model);
@@ -137,8 +157,9 @@ export async function buildDashboardSnapshot(): Promise<DashboardSnapshot> {
       title: parsed.title,
       startedAt: parsed.startedAt,
       lastActivityAt: parsed.lastActivityAt,
-      status: deriveStatus(pid !== null, parsed.turnComplete),
+      status: deriveStatus(pid !== null, parsed.turnComplete, parsed.lastActivityAt, now),
       pid,
+      logPath: pid !== null ? getLogPathForPid(pid, cwd) : null,
       lastAction: parsed.lastAction,
       usage: {
         inputTokens: parsed.usage.inputTokens,
