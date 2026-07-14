@@ -56,7 +56,20 @@ export class StaticFileServer {
             return new Response("Not found", { status: 404 });
         }
 
-        return new Response(file);
+        return new Response(file, { headers: { "Cache-Control": this.cacheControlFor(filePath) } });
+    }
+
+    /**
+     * Vite content-hashes filenames under `assets/`, so a given filename's content never
+     * changes and can be cached forever. Everything else (`index.html`, the SPA fallback,
+     * unhashed files like `favicon.svg`) must always revalidate — otherwise a browser holding
+     * a stale `index.html` after a rebuild will reference deleted hashed asset filenames and
+     * 404, leaving a blank page.
+     */
+    private cacheControlFor(filePath: string): string {
+        const relative = filePath.slice(this.root.length + 1);
+        const isHashedAsset = relative.split(sep)[0] === "assets";
+        return isHashedAsset ? "public, max-age=31536000, immutable" : "no-cache";
     }
 
     private safeDecode(pathname: string): string | null {

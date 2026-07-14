@@ -11,6 +11,7 @@ import "./index.css";
 
 import App from "./App";
 import { theme } from "./theme";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } },
@@ -21,7 +22,9 @@ createRoot(document.getElementById("root")!).render(
     <MantineProvider theme={theme} defaultColorScheme="dark">
       <Notifications position="bottom-right" />
       <QueryClientProvider client={queryClient}>
-        <App />
+        <ErrorBoundary label="Dashboard">
+          <App />
+        </ErrorBoundary>
       </QueryClientProvider>
     </MantineProvider>
   </StrictMode>

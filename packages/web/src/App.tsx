@@ -27,6 +27,7 @@ import {
     IconTerminal2,
 } from "@tabler/icons-react";
 import type {
+    KillOutcome,
     SessionSummary,
     SessionStatus,
     StatsPeriod,
@@ -39,6 +40,7 @@ import { SessionCard } from "./components/SessionCard";
 import { SessionDetailDrawer } from "./components/SessionDetailDrawer";
 import { NewSessionModal } from "./components/NewSessionModal";
 import { ConfirmDialog } from "./components/ConfirmDialog";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 import { isRecentlyEnded } from "./utils/sessionHealth";
 import { sortSessions } from "./utils/sessionSort";
 import { vizColors } from "./theme";
@@ -46,6 +48,20 @@ import { vizColors } from "./theme";
 type FilterOption = "all" | "active" | "ended";
 
 const ACTIVE_STATUSES: SessionStatus[] = ["running", "waiting_input", "idle"];
+
+/** The kill endpoint can report the signal was sent but had no real effect — surface that honestly. */
+function killOutcomeNotification(outcome: KillOutcome, cwd: string) {
+    switch (outcome) {
+        case "killed":
+            return { title: "Kill signal sent", message: `Stopping session in ${cwd}`, color: "orange" };
+        case "not_found":
+            return { title: "Session already gone", message: `No running process found in ${cwd} — it may have already ended`, color: "blue" };
+        case "permission_denied":
+            return { title: "Permission denied", message: `Could not stop the process in ${cwd} — insufficient permissions`, color: "red" };
+        case "error":
+            return { title: "Failed to kill session", message: `Could not stop the process in ${cwd}`, color: "red" };
+    }
+}
 
 /** Header status strip item: LED + mono count, tmux-status-bar style. */
 function StatusStripItem({
@@ -105,12 +121,8 @@ export default function App() {
 
     const killMutation = useMutation({
         mutationFn: (session: SessionSummary) => killSession(session.pid!),
-        onSuccess: (_res, session) => {
-            notifications.show({
-                title: "Kill signal sent",
-                message: `Stopping session in ${session.cwd}`,
-                color: "orange",
-            });
+        onSuccess: (res, session) => {
+            notifications.show(killOutcomeNotification(res.outcome, session.cwd));
             queryClient.invalidateQueries({ queryKey: SNAPSHOT_QUERY_KEY });
             setKillTarget(null);
         },
@@ -281,11 +293,13 @@ export default function App() {
                     </Alert>
                 )}
                 {data && (
-                    <StatsHeader
-                        stats={data.statsByPeriod[period]}
-                        period={period}
-                        onPeriodChange={setPeriod}
-                    />
+                    <ErrorBoundary label='Stats header'>
+                        <StatsHeader
+                            stats={data.statsByPeriod[period]}
+                            period={period}
+                            onPeriodChange={setPeriod}
+                        />
+                    </ErrorBoundary>
                 )}
                 <Group justify='space-between' mt='lg' mb='sm'>
                     <TextInput
@@ -377,48 +391,61 @@ export default function App() {
                     spacing='md'
                 >
                     {filtered.map((session) => (
-                        <SessionCard
+                        <ErrorBoundary
                             key={session.transcriptPath}
-                            session={session}
-                            onView={setSelected}
-                            onKill={handleKill}
-                        />
+                            label={`Session card (${session.cwd})`}
+                        >
+                            <SessionCard
+                                session={session}
+                                onView={setSelected}
+                                onKill={handleKill}
+                            />
+                        </ErrorBoundary>
                     ))}
                 </SimpleGrid>
             </AppShell.Main>
 
-            <SessionDetailDrawer
-                session={selected}
-                onClose={() => setSelected(null)}
-                onKill={handleKill}
-            />
-            <NewSessionModal
-                opened={newSessionOpen}
-                onClose={() => setNewSessionOpen(false)}
-                recentDirs={recentDirs}
-            />
-            <ConfirmDialog
-                opened={killTarget !== null}
-                title={DEMO_MODE ? "Simulate killing this session?" : "Kill this session?"}
-                confirmLabel={DEMO_MODE ? "Simulate kill" : "Kill session"}
-                loading={killMutation.isPending}
-                onConfirm={() => killTarget && killMutation.mutate(killTarget)}
-                onCancel={() => setKillTarget(null)}
+            <ErrorBoundary
+                key={selected?.transcriptPath ?? "none"}
+                label='Session detail'
             >
-                {killTarget && (
-                    <>
-                        This sends a stop signal to the Claude Code process{" "}
-                        <Text span className='cd-mono' c='bright'>
-                            pid {killTarget.pid}
-                        </Text>{" "}
-                        running in{" "}
-                        <Text span className='cd-mono' c='bright'>
-                            {killTarget.cwd}
-                        </Text>
-                        . Unsaved work in that session stops immediately.
-                    </>
-                )}
-            </ConfirmDialog>
+                <SessionDetailDrawer
+                    session={selected}
+                    onClose={() => setSelected(null)}
+                    onKill={handleKill}
+                />
+            </ErrorBoundary>
+            <ErrorBoundary label='New session dialog'>
+                <NewSessionModal
+                    opened={newSessionOpen}
+                    onClose={() => setNewSessionOpen(false)}
+                    recentDirs={recentDirs}
+                />
+            </ErrorBoundary>
+            <ErrorBoundary label='Kill confirmation dialog'>
+                <ConfirmDialog
+                    opened={killTarget !== null}
+                    title={DEMO_MODE ? "Simulate killing this session?" : "Kill this session?"}
+                    confirmLabel={DEMO_MODE ? "Simulate kill" : "Kill session"}
+                    loading={killMutation.isPending}
+                    onConfirm={() => killTarget && killMutation.mutate(killTarget)}
+                    onCancel={() => setKillTarget(null)}
+                >
+                    {killTarget && (
+                        <>
+                            This sends a stop signal to the Claude Code process{" "}
+                            <Text span className='cd-mono' c='bright'>
+                                pid {killTarget.pid}
+                            </Text>{" "}
+                            running in{" "}
+                            <Text span className='cd-mono' c='bright'>
+                                {killTarget.cwd}
+                            </Text>
+                            . Unsaved work in that session stops immediately.
+                        </>
+                    )}
+                </ConfirmDialog>
+            </ErrorBoundary>
         </AppShell>
     );
 }

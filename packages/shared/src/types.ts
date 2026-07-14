@@ -81,10 +81,13 @@ export interface CreateSessionResponse {
   logPath: string;
 }
 
+export type KillOutcome = "killed" | "not_found" | "permission_denied" | "error";
+
 export interface KillSessionResponse {
   ok: boolean;
   pid: number | null;
   signal: string;
+  outcome: KillOutcome;
 }
 
 export interface DashboardTotals {

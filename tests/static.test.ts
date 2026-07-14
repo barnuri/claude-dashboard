@@ -71,3 +71,32 @@ describe("StaticFileServer.resolve", () => {
         expect(new StaticFileServer(join(root, "nope")).hasRoot()).toBe(false);
     });
 });
+
+describe("StaticFileServer.serve cache headers", () => {
+    test("hashed assets are cached forever and immutable", async () => {
+        const root = makeDist();
+        const server = new StaticFileServer(root);
+
+        const response = await server.serve("/assets/app.js");
+
+        expect(response?.headers.get("Cache-Control")).toBe("public, max-age=31536000, immutable");
+    });
+
+    test("index.html always revalidates, so a stale copy can't reference deleted assets", async () => {
+        const root = makeDist();
+        const server = new StaticFileServer(root);
+
+        const response = await server.serve("/");
+
+        expect(response?.headers.get("Cache-Control")).toBe("no-cache");
+    });
+
+    test("the SPA fallback (unknown route -> index.html) also always revalidates", async () => {
+        const root = makeDist();
+        const server = new StaticFileServer(root);
+
+        const response = await server.serve("/sessions/abc123");
+
+        expect(response?.headers.get("Cache-Control")).toBe("no-cache");
+    });
+});

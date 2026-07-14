@@ -9,7 +9,7 @@ import {
 } from "@claude-dashboard/shared";
 import { PROJECTS_DIR, WAITING_INPUT_GRACE_MS } from "./config";
 import { parseTranscriptFile } from "./transcript";
-import { listClaudeProcesses } from "./processes";
+import { listClaudeProcesses, type ClaudeProcess } from "./processes";
 import { PeriodStatsBuilder } from "./stats";
 import { getLogPathForPid, pruneDeadLogEntries } from "./logRegistry";
 
@@ -64,24 +64,58 @@ function listTranscriptFiles(): TranscriptFile[] {
 }
 
 /**
- * A transcript line that merely *looks* like a finished turn doesn't mean the session is
- * actually waiting on the user yet — compaction, subagent/hook activity, or write lag can make
- * a still-busy session look done for a moment. Report "idle" during a short grace window after
- * the apparent turn-complete point, and only escalate to "waiting_input" once that window has
- * passed with no further transcript activity.
+ * "waiting_input" ("Needs you") is reserved for a genuine block on the user — an unresolved
+ * `AskUserQuestion` call — which can happen even mid-turn (its stop_reason is "tool_use", not
+ * "end_turn"), so that check runs before the turnComplete branch. A cleanly finished turn with no
+ * pending question is never "waiting_input": it settles into "idle" once a short grace window
+ * (absorbing write lag from compaction, subagent/hook activity) has passed with no further
+ * transcript activity.
  */
 export function deriveStatus(
   hasLivePid: boolean,
   turnComplete: boolean,
+  awaitingUserQuestion: boolean,
   lastActivityAt: string | null,
   now: number
 ): SessionStatus {
   if (!hasLivePid) return "ended";
+  if (awaitingUserQuestion) return "waiting_input";
   if (!turnComplete) return "running";
-  if (!lastActivityAt) return "waiting_input";
+  if (!lastActivityAt) return "idle";
 
   const elapsedMs = now - Date.parse(lastActivityAt);
-  return elapsedMs < WAITING_INPUT_GRACE_MS ? "idle" : "waiting_input";
+  return elapsedMs < WAITING_INPUT_GRACE_MS ? "running" : "idle";
+}
+
+export interface TranscriptCandidate {
+  filePath: string;
+  lastActivityAt: string | null;
+}
+
+/**
+ * Assigns each live process to the most-recently-active, not-yet-claimed transcript sharing its
+ * cwd. There's no real OS-level link between a `claude` process and "which transcript file it's
+ * writing to" — this is a best-effort heuristic. Pairing the most-recently-*started* process with
+ * the most-recently-*active* transcript (rather than raw, unordered `ps` listing order) is the
+ * best signal available when several processes share a cwd.
+ */
+export function pairProcessesToTranscripts(
+  processesByCwd: ReadonlyMap<string, readonly ClaudeProcess[]>,
+  transcriptsByCwd: ReadonlyMap<string, readonly TranscriptCandidate[]>
+): Map<string, number> {
+  const pidByFilePath = new Map<string, number>();
+  for (const [cwd, cwdProcesses] of processesByCwd) {
+    const pids = cwdProcesses.slice().sort((a, b) => a.startedSecondsAgo - b.startedSecondsAgo);
+    const candidates = (transcriptsByCwd.get(cwd) ?? []).slice().sort((a, b) => {
+      const aTime = a.lastActivityAt ? Date.parse(a.lastActivityAt) : 0;
+      const bTime = b.lastActivityAt ? Date.parse(b.lastActivityAt) : 0;
+      return bTime - aTime;
+    });
+    for (let i = 0; i < pids.length && i < candidates.length; i++) {
+      pidByFilePath.set(candidates[i]!.filePath, pids[i]!.pid);
+    }
+  }
+  return pidByFilePath;
 }
 
 const MAX_SESSIONS = 300;
@@ -108,25 +142,22 @@ export async function buildDashboardSnapshot(): Promise<DashboardSnapshot> {
   }
 
   // Assign each live process to the most-recently-active, not-yet-claimed transcript sharing its cwd.
-  const pidByFilePath = new Map<string, number>();
-  const processesByCwd = new Map<string, number[]>();
+  const processesByCwd = new Map<string, ClaudeProcess[]>();
   for (const proc of processes) {
     if (!proc.cwd) continue;
     const cwd = normalizePath(proc.cwd);
     const list = processesByCwd.get(cwd) ?? [];
-    list.push(proc.pid);
+    list.push(proc);
     processesByCwd.set(cwd, list);
   }
-  for (const [cwd, pids] of processesByCwd) {
-    const candidates = (groups.get(cwd) ?? []).slice().sort((a, b) => {
-      const aTime = a.parsed.lastActivityAt ? Date.parse(a.parsed.lastActivityAt) : 0;
-      const bTime = b.parsed.lastActivityAt ? Date.parse(b.parsed.lastActivityAt) : 0;
-      return bTime - aTime;
-    });
-    for (let i = 0; i < pids.length && i < candidates.length; i++) {
-      pidByFilePath.set(candidates[i]!.tf.filePath, pids[i]!);
-    }
+  const transcriptsByCwd = new Map<string, TranscriptCandidate[]>();
+  for (const [cwd, entries] of groups) {
+    transcriptsByCwd.set(
+      cwd,
+      entries.map((entry) => ({ filePath: entry.tf.filePath, lastActivityAt: entry.parsed.lastActivityAt }))
+    );
   }
+  const pidByFilePath = pairProcessesToTranscripts(processesByCwd, transcriptsByCwd);
 
   pruneDeadLogEntries(new Set(processes.map((p) => p.pid)));
 
@@ -157,7 +188,7 @@ export async function buildDashboardSnapshot(): Promise<DashboardSnapshot> {
       title: parsed.title,
       startedAt: parsed.startedAt,
       lastActivityAt: parsed.lastActivityAt,
-      status: deriveStatus(pid !== null, parsed.turnComplete, parsed.lastActivityAt, now),
+      status: deriveStatus(pid !== null, parsed.turnComplete, parsed.awaitingUserQuestion, parsed.lastActivityAt, now),
       pid,
       logPath: pid !== null ? getLogPathForPid(pid, cwd) : null,
       lastAction: parsed.lastAction,

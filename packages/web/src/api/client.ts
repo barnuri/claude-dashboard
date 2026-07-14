@@ -59,7 +59,7 @@ export async function killSession(pid: number, force = false): Promise<KillSessi
     const { demoStore } = await import("../demo/mockData");
     await new Promise((r) => setTimeout(r, 200));
     demoStore.kill(pid);
-    return { ok: true, pid, signal: force ? "SIGKILL" : "SIGTERM" };
+    return { ok: true, pid, signal: force ? "SIGKILL" : "SIGTERM", outcome: "killed" };
   }
   return request<KillSessionResponse>("/api/kill", { method: "POST", body: JSON.stringify({ pid, force }) });
 }

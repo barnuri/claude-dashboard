@@ -26,6 +26,8 @@ export interface ParsedTranscript {
   lastAction: LastAction | null;
   /** True when the last thing in the transcript is a finished assistant turn (end_turn/refusal/max_tokens). */
   turnComplete: boolean;
+  /** True when the assistant called `AskUserQuestion` and no matching `tool_result` has arrived yet. */
+  awaitingUserQuestion: boolean;
   usage: {
     inputTokens: number;
     outputTokens: number;
@@ -48,6 +50,9 @@ interface CacheEntry {
 const fileCache = new Map<string, CacheEntry>();
 
 const META_LINE_TYPES = new Set(["queue-operation", "attachment", "last-prompt"]);
+
+/** Tool whose call genuinely blocks on the human — a real "needs you" signal, unlike a normal tool_use. */
+const ASK_USER_QUESTION_TOOL = "AskUserQuestion";
 
 function truncate(text: string, max = 140): string {
   const flat = text.replace(/\s+/g, " ").trim();
@@ -166,6 +171,7 @@ export function parseTranscriptFile(filePath: string, fallbackId: string): Parse
   let lastActivityAt: string | null = null;
   let lastAction: LastAction | null = null;
   let turnComplete = false;
+  const pendingAskUserQuestionIds = new Set<string>();
 
   const seenAssistantMessageIds = new Set<string>();
   let inputTokens = 0;
@@ -233,22 +239,35 @@ export function parseTranscriptFile(filePath: string, fallbackId: string): Parse
         }
       }
 
-      const content = Array.isArray(msg?.content) ? msg.content : [];
-      const block = content[0];
+      const blocks = Array.isArray(msg?.content) ? msg.content : [];
+      const block = blocks[0];
       const blockType = block?.type;
       const action = extractLastAction(entry, blockType, block);
       if (action) lastAction = action;
+
+      for (const contentBlock of blocks) {
+        if (contentBlock?.type === "tool_use" && contentBlock?.name === ASK_USER_QUESTION_TOOL && typeof contentBlock?.id === "string") {
+          pendingAskUserQuestionIds.add(contentBlock.id);
+        }
+      }
 
       // stop_reason lives on the message object, not the top-level transcript entry.
       const stopReason = msg?.stop_reason;
       turnComplete = stopReason === "end_turn" || stopReason === "refusal" || stopReason === "max_tokens";
     } else if (entry.type === "user") {
       const content = entry.message?.content;
-      const block = Array.isArray(content) ? content[0] : undefined;
+      const blocks = Array.isArray(content) ? content : [];
+      const block = blocks[0];
       const blockType = block?.type;
       const action = extractLastAction(entry, blockType, block);
       if (action) lastAction = action;
       turnComplete = false;
+
+      for (const contentBlock of blocks) {
+        if (contentBlock?.type === "tool_result" && typeof contentBlock?.tool_use_id === "string") {
+          pendingAskUserQuestionIds.delete(contentBlock.tool_use_id);
+        }
+      }
     }
   }
 
@@ -264,6 +283,7 @@ export function parseTranscriptFile(filePath: string, fallbackId: string): Parse
     messageCount,
     lastAction,
     turnComplete,
+    awaitingUserQuestion: pendingAskUserQuestionIds.size > 0,
     usage: {
       inputTokens,
       outputTokens,
