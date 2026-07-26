@@ -278,6 +278,15 @@ body {
   }
 }
 
+/* Full-page terminal: fills the viewport under the app header. */
+.cd-terminal--page {
+  height: calc(100dvh - 96px);
+  border: 1px solid var(--cd-border);
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.5);
+}
+
 /* Claude Code-style status line pinned under the transcript. */
 .cd-terminal-statusline {
   display: flex;

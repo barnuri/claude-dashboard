@@ -1,21 +1,19 @@
 import { Fragment, useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
-  ActionIcon,
   Button,
   CopyButton,
   Group,
-  Modal,
   SegmentedControl,
   Text,
   Tooltip,
 } from "@mantine/core";
 import {
+  IconArrowLeft,
   IconCheck,
   IconCopy,
   IconGitBranch,
   IconPlayerStopFilled,
-  IconX,
 } from "@tabler/icons-react";
 import type { SessionSummary, TranscriptFeedItem } from "@claude-dashboard/shared";
 import { fetchFeed } from "../api/client";
@@ -26,8 +24,8 @@ import { StatusBadge } from "./StatusBadge";
 import { basename, formatRelativeTime, formatTokens, formatUsd } from "../utils/format";
 
 interface Props {
-  session: SessionSummary | null;
-  onClose: () => void;
+  session: SessionSummary;
+  onBack: () => void;
   onKill: (session: SessionSummary) => void;
 }
 
@@ -147,42 +145,62 @@ function TranscriptEntry({ row }: { row: TranscriptRow }) {
 }
 
 /**
- * The signature view: a selected session rendered as a read-only Claude Code
- * terminal — window chrome, TUI-style transcript, blinking cursor while the
- * session runs, and a status-line footer.
+ * The signature view: a selected session rendered as a full-page read-only
+ * Claude Code terminal — window chrome with a back control, TUI-style
+ * transcript, and a status-line footer. Follows new output by default
+ * (ResizeObserver on the content) until the user scrolls up to read.
  */
-export function SessionTerminal({ session, onClose, onKill }: Props) {
-  const opened = session !== null;
+export function SessionTerminal({ session, onBack, onKill }: Props) {
   const [tab, setTab] = useState<TerminalTab>("transcript");
   const bodyRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
   const pinnedToBottom = useRef(true);
 
   const { data } = useQuery({
-    queryKey: session ? feedQueryKey(session.id) : ["feed", "none"],
-    queryFn: () => fetchFeed(session!.id, 200),
-    enabled: opened,
-    refetchInterval: opened ? 2000 : false,
+    queryKey: feedQueryKey(session.id),
+    queryFn: () => fetchFeed(session.id, 200),
+    refetchInterval: 2000,
   });
 
   const live = data?.session ?? session;
-  const feed = data?.feed ?? [];
-  const rows = pairToolResults(feed);
-  const isRunning = live?.status === "running";
+  const rows = pairToolResults(data?.feed ?? []);
+  const isRunning = live.status === "running";
 
   useEffect(() => {
     setTab("transcript");
     pinnedToBottom.current = true;
-  }, [session?.id]);
+  }, [session.id]);
 
-  // Auto-follow new output, but stop following once the user scrolls up to read.
-  // Keyed to the raw feed (react-query returns a new reference whenever content
-  // changes) — row count alone misses tool results merging into existing rows.
   useEffect(() => {
-    const el = bodyRef.current;
-    if (el && pinnedToBottom.current) {
-      el.scrollTop = el.scrollHeight;
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        onBack();
+      }
     }
-  }, [feed, tab]);
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [onBack]);
+
+  // Default autoscroll: any content-height change (new feed rows, raw log
+  // chunks, late font/layout shifts) re-pins the view to the bottom while the
+  // user hasn't scrolled up. ResizeObserver catches growth that feed identity
+  // alone would miss.
+  useEffect(() => {
+    const body = bodyRef.current;
+    const content = contentRef.current;
+    if (!body || !content) {
+      return;
+    }
+    const followBottom = () => {
+      if (pinnedToBottom.current) {
+        body.scrollTop = body.scrollHeight;
+      }
+    };
+    followBottom();
+    const observer = new ResizeObserver(followBottom);
+    observer.observe(content);
+    return () => observer.disconnect();
+  }, [tab, session.id]);
 
   function handleScroll() {
     const el = bodyRef.current;
@@ -191,130 +209,122 @@ export function SessionTerminal({ session, onClose, onKill }: Props) {
   }
 
   return (
-    <Modal
-      opened={opened}
-      onClose={onClose}
-      withCloseButton={false}
-      centered
-      size="min(1100px, 94vw)"
-      padding={0}
-      radius="md"
-      overlayProps={{ backgroundOpacity: 0.6, blur: 3 }}
-      styles={{
-        content: { height: "86vh", display: "flex", flexDirection: "column", overflow: "hidden" },
-        body: { flex: 1, minHeight: 0, display: "flex", flexDirection: "column", padding: 0 },
-      }}
-    >
-      {live && (
-        <div className="cd-terminal">
-          <div className="cd-terminal-titlebar">
-            <span className="cd-traffic cd-traffic--live" aria-hidden>
-              <i />
-              <i />
-              <i />
-            </span>
-            <Text
-              size="sm"
-              className="cd-mono"
-              truncate
-              style={{ flex: 1, minWidth: 0 }}
-              title={live.cwd}
-            >
-              claude — {basename(live.cwd)}
-              {live.gitBranch ? ` — ${live.gitBranch}` : ""}
-            </Text>
-            <span className="cd-readonly-badge">read-only</span>
-            <StatusBadge status={live.status} />
-            {live.logPath && (
-              <SegmentedControl
-                size="xs"
-                value={tab}
-                onChange={(v) => setTab(v as TerminalTab)}
-                data={[
-                  { label: "Transcript", value: "transcript" },
-                  { label: "Raw log", value: "rawlog" },
-                ]}
-              />
-            )}
-            <CopyButton value={`claude --resume ${live.id}`} timeout={1500}>
-              {({ copied, copy }) => (
-                <Tooltip label="Copy the resume command" openDelay={300}>
-                  <Button
-                    size="compact-xs"
-                    variant="default"
-                    leftSection={copied ? <IconCheck size={13} /> : <IconCopy size={13} />}
-                    onClick={copy}
-                  >
-                    {copied ? "Copied" : "Resume"}
-                  </Button>
-                </Tooltip>
-              )}
-            </CopyButton>
-            <Button
-              size="compact-xs"
-              variant="light"
-              color="red"
-              disabled={!live.pid}
-              leftSection={<IconPlayerStopFilled size={13} />}
-              onClick={() => onKill(live)}
-            >
-              Kill
-            </Button>
-            <ActionIcon variant="subtle" color="gray" aria-label="Close terminal" onClick={onClose}>
-              <IconX size={16} />
-            </ActionIcon>
-          </div>
-
-          {tab === "transcript" ? (
-            <div
-              ref={bodyRef}
-              className="cd-terminal-body"
-              onScroll={handleScroll}
-              tabIndex={0}
-              aria-label="Session transcript, read-only"
-            >
-              {rows.length === 0 && (
-                <Text size="sm" c="dimmed" className="cd-mono">
-                  No transcript entries yet…
-                </Text>
-              )}
-              {rows.map((row, i) => (
-                <TranscriptEntry key={i} row={row} />
-              ))}
-              {isRunning && <span className="cd-cursor" aria-hidden />}
-            </div>
-          ) : (
-            <div className="cd-terminal-body" aria-label="Raw session log, read-only">
-              <LiveOutputPanel sessionId={live.id} logPath={live.logPath} />
-            </div>
+    <div className="cd-terminal cd-terminal--page">
+      <div className="cd-terminal-titlebar">
+        <Button
+          size="compact-sm"
+          variant="subtle"
+          color="gray"
+          leftSection={<IconArrowLeft size={15} />}
+          onClick={onBack}
+        >
+          Sessions
+        </Button>
+        <span className="cd-traffic cd-traffic--live" aria-hidden>
+          <i />
+          <i />
+          <i />
+        </span>
+        <Text size="sm" className="cd-mono" truncate style={{ flex: 1, minWidth: 0 }} title={live.cwd}>
+          claude — {basename(live.cwd)}
+          {live.gitBranch ? ` — ${live.gitBranch}` : ""}
+        </Text>
+        <span className="cd-readonly-badge">read-only</span>
+        <StatusBadge status={live.status} />
+        {live.logPath && (
+          <SegmentedControl
+            size="xs"
+            value={tab}
+            onChange={(v) => setTab(v as TerminalTab)}
+            data={[
+              { label: "Transcript", value: "transcript" },
+              { label: "Raw log", value: "rawlog" },
+            ]}
+          />
+        )}
+        <CopyButton value={`claude --resume ${live.id}`} timeout={1500}>
+          {({ copied, copy }) => (
+            <Tooltip label="Copy the resume command" openDelay={300}>
+              <Button
+                size="compact-xs"
+                variant="default"
+                leftSection={copied ? <IconCheck size={13} /> : <IconCopy size={13} />}
+                onClick={copy}
+              >
+                {copied ? "Copied" : "Resume"}
+              </Button>
+            </Tooltip>
           )}
+        </CopyButton>
+        <Button
+          size="compact-xs"
+          variant="light"
+          color="red"
+          disabled={!live.pid}
+          leftSection={<IconPlayerStopFilled size={13} />}
+          onClick={() => onKill(live)}
+        >
+          Kill
+        </Button>
+      </div>
 
-          <div className="cd-terminal-statusline cd-mono">
-            {live.model && <span>{live.model}</span>}
-            {live.gitBranch && (
-              <Group gap={4} wrap="nowrap">
-                <IconGitBranch size={12} />
-                <span>{live.gitBranch}</span>
-              </Group>
+      {tab === "transcript" ? (
+        <div
+          ref={bodyRef}
+          className="cd-terminal-body"
+          onScroll={handleScroll}
+          tabIndex={0}
+          aria-label="Session transcript, read-only"
+        >
+          <div ref={contentRef}>
+            {rows.length === 0 && (
+              <Text size="sm" c="dimmed" className="cd-mono">
+                No transcript entries yet…
+              </Text>
             )}
-            <Group gap={6} wrap="nowrap" style={{ flex: 1, minWidth: 160 }}>
-              <span style={{ whiteSpace: "nowrap" }}>
-                ctx {formatTokens(live.usage.contextTokens)}/{formatTokens(live.usage.contextLimit)}
-              </span>
-              <div style={{ flex: 1, maxWidth: 220 }}>
-                <ContextMeter used={live.usage.contextTokens} limit={live.usage.contextLimit} />
-              </div>
-            </Group>
-            <span>{formatUsd(live.cost.totalUsd)}</span>
-            <span>{live.messageCount} turns</span>
-            <span>
-              in {formatTokens(live.usage.inputTokens)} · out {formatTokens(live.usage.outputTokens)} · cache{" "}
-              {formatTokens(live.usage.cacheReadTokens + live.usage.cacheCreationTokens)}
-            </span>
-            <span>updated {formatRelativeTime(live.lastActivityAt)}</span>
+            {rows.map((row, i) => (
+              <TranscriptEntry key={i} row={row} />
+            ))}
+            {isRunning && <span className="cd-cursor" aria-hidden />}
+          </div>
+        </div>
+      ) : (
+        <div
+          ref={bodyRef}
+          className="cd-terminal-body"
+          onScroll={handleScroll}
+          aria-label="Raw session log, read-only"
+        >
+          <div ref={contentRef}>
+            <LiveOutputPanel sessionId={live.id} logPath={live.logPath} />
           </div>
         </div>
       )}
-    </Modal>
+
+      <div className="cd-terminal-statusline cd-mono">
+        {live.model && <span>{live.model}</span>}
+        {live.gitBranch && (
+          <Group gap={4} wrap="nowrap">
+            <IconGitBranch size={12} />
+            <span>{live.gitBranch}</span>
+          </Group>
+        )}
+        <Group gap={6} wrap="nowrap" style={{ flex: 1, minWidth: 160 }}>
+          <span style={{ whiteSpace: "nowrap" }}>
+            ctx {formatTokens(live.usage.contextTokens)}/{formatTokens(live.usage.contextLimit)}
+          </span>
+          <div style={{ flex: 1, maxWidth: 220 }}>
+            <ContextMeter used={live.usage.contextTokens} limit={live.usage.contextLimit} />
+          </div>
+        </Group>
+        <span>{formatUsd(live.cost.totalUsd)}</span>
+        <span>{live.messageCount} turns</span>
+        <span>
+          in {formatTokens(live.usage.inputTokens)} · out {formatTokens(live.usage.outputTokens)} · cache{" "}
+          {formatTokens(live.usage.cacheReadTokens + live.usage.cacheCreationTokens)}
+        </span>
+        <span>updated {formatRelativeTime(live.lastActivityAt)}</span>
+      </div>
+    </div>
   );
 }

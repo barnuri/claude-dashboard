@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
     ActionIcon,
@@ -42,6 +42,7 @@ import { NewSessionModal } from "./components/NewSessionModal";
 import { ConfirmDialog } from "./components/ConfirmDialog";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { isRecentlyEnded } from "./utils/sessionHealth";
+import { buildSessionHash, parseSessionHash } from "./utils/sessionHash";
 import { sortSessions } from "./utils/sessionSort";
 import { vizColors } from "./theme";
 
@@ -104,7 +105,11 @@ export default function App() {
         defaultValue: 4,
         getInitialValueInEffect: false,
     });
-    const [selected, setSelected] = useState<SessionSummary | null>(null);
+    // The terminal page is addressed by `#/session/<id>` so deep links and the
+    // browser back button work without a router dependency.
+    const [selectedId, setSelectedId] = useState<string | null>(() =>
+        parseSessionHash(window.location.hash),
+    );
     const [newSessionOpen, setNewSessionOpen] = useState(false);
     const [killTarget, setKillTarget] = useState<SessionSummary | null>(null);
     const queryClient = useQueryClient();
@@ -141,7 +146,35 @@ export default function App() {
         setKillTarget(session);
     }
 
+    useEffect(() => {
+        function onHashChange() {
+            setSelectedId(parseSessionHash(window.location.hash));
+        }
+        window.addEventListener("hashchange", onHashChange);
+        return () => window.removeEventListener("hashchange", onHashChange);
+    }, []);
+
     const sessions = data?.sessions ?? [];
+    const selected = useMemo(
+        () => sessions.find((s) => s.id === selectedId) ?? null,
+        [sessions, selectedId],
+    );
+
+    function openSession(session: SessionSummary) {
+        window.location.hash = buildSessionHash(session.id);
+    }
+
+    function closeSession() {
+        window.location.hash = "";
+    }
+
+    // A stale deep link (session no longer in the snapshot) falls back to the deck.
+    useEffect(() => {
+        if (data && selectedId && !selected) {
+            closeSession();
+        }
+    }, [data, selectedId, selected]);
+
     const recentDirs = useMemo(
         () => Array.from(new Set(sessions.map((s) => s.cwd))).slice(0, 20),
         [sessions],
@@ -277,6 +310,24 @@ export default function App() {
             </AppShell.Header>
 
             <AppShell.Main>
+                {selected ? (
+                    <ErrorBoundary
+                        key={selected.transcriptPath}
+                        label='Session terminal'
+                    >
+                        <SessionTerminal
+                            session={selected}
+                            onBack={() => {
+                                // Esc bubbles past Mantine modals — don't leave the
+                                // terminal when the user is just dismissing a dialog.
+                                if (newSessionOpen || killTarget) return;
+                                closeSession();
+                            }}
+                            onKill={handleKill}
+                        />
+                    </ErrorBoundary>
+                ) : (
+                    <>
                 {DEMO_MODE && (
                     <Alert
                         icon={<IconInfoCircle size={16} />}
@@ -397,24 +448,16 @@ export default function App() {
                         >
                             <SessionCard
                                 session={session}
-                                onView={setSelected}
+                                onView={openSession}
                                 onKill={handleKill}
                             />
                         </ErrorBoundary>
                     ))}
                 </SimpleGrid>
+                    </>
+                )}
             </AppShell.Main>
 
-            <ErrorBoundary
-                key={selected?.transcriptPath ?? "none"}
-                label='Session detail'
-            >
-                <SessionTerminal
-                    session={selected}
-                    onClose={() => setSelected(null)}
-                    onKill={handleKill}
-                />
-            </ErrorBoundary>
             <ErrorBoundary label='New session dialog'>
                 <NewSessionModal
                     opened={newSessionOpen}

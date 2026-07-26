@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from "react";
-import { Box, ScrollArea, Text } from "@mantine/core";
+import { useEffect, useState } from "react";
+import { Box, Text } from "@mantine/core";
 import { logStreamUrl } from "../api/client";
 
 /** Cap the buffered output so a long-running session doesn't grow this panel's memory unbounded. */
@@ -10,9 +10,9 @@ interface Props {
   logPath: string | null;
 }
 
+/** Raw SSE log tail. Scrolling/following is owned by the parent terminal body. */
 export function LiveOutputPanel({ sessionId, logPath }: Props) {
   const [output, setOutput] = useState("");
-  const viewportRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!logPath) return;
@@ -30,10 +30,6 @@ export function LiveOutputPanel({ sessionId, logPath }: Props) {
     return () => source.close();
   }, [sessionId, logPath]);
 
-  useEffect(() => {
-    viewportRef.current?.scrollTo({ top: viewportRef.current.scrollHeight });
-  }, [output]);
-
   if (!logPath) {
     return (
       <Text size="sm" c="dimmed">
@@ -43,10 +39,8 @@ export function LiveOutputPanel({ sessionId, logPath }: Props) {
   }
 
   return (
-    <ScrollArea.Autosize mah={280} type="auto" viewportRef={viewportRef}>
-      <Box component="pre" className="cd-mono" fz="xs" style={{ whiteSpace: "pre-wrap", margin: 0 }}>
-        {output || "Waiting for output…"}
-      </Box>
-    </ScrollArea.Autosize>
+    <Box component="pre" className="cd-mono" fz="xs" style={{ whiteSpace: "pre-wrap", margin: 0 }}>
+      {output || "Waiting for output…"}
+    </Box>
   );
 }
