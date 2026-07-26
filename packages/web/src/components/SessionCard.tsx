@@ -1,13 +1,4 @@
-import {
-  Box,
-  Button,
-  Card,
-  CopyButton,
-  Group,
-  Stack,
-  Text,
-  Tooltip,
-} from "@mantine/core";
+import { Box, Button, Card, CopyButton, Group, Stack, Text, Tooltip } from "@mantine/core";
 import {
   IconCheck,
   IconCopy,
@@ -32,6 +23,8 @@ interface Props {
   onKill: (session: SessionSummary) => void;
 }
 
+const ALIVE_STATUSES = new Set(["running", "waiting_input", "idle"]);
+
 function MetaItem({ icon, text }: { icon?: React.ReactNode; text: string }) {
   return (
     <Group gap={4} wrap="nowrap">
@@ -43,8 +36,10 @@ function MetaItem({ icon, text }: { icon?: React.ReactNode; text: string }) {
   );
 }
 
+/** A session rendered as a miniature terminal window — click to open the full read-only terminal. */
 export function SessionCard({ session, onView, onKill }: Props) {
   const health = deriveSessionHealth(session);
+  const alive = ALIVE_STATUSES.has(session.status);
 
   function stop(handler: () => void) {
     return (e: MouseEvent) => {
@@ -59,7 +54,7 @@ export function SessionCard({ session, onView, onKill }: Props) {
       onClick={() => onView(session)}
       role="button"
       tabIndex={0}
-      aria-label={`Session in ${session.cwd}, ${health.label}`}
+      aria-label={`Open session in ${session.cwd} as terminal, ${health.label}`}
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
@@ -71,21 +66,26 @@ export function SessionCard({ session, onView, onKill }: Props) {
         opacity: health.dimmed ? 0.62 : 1,
       }}
     >
-      <Stack gap="sm">
-        <Group justify="space-between" wrap="nowrap">
+      <Stack gap={10}>
+        <div className="cd-card-titlebar">
+          <span className={`cd-traffic${alive ? " cd-traffic--live" : ""}`} aria-hidden>
+            <i />
+            <i />
+            <i />
+          </span>
           <Tooltip label={session.cwd} openDelay={300}>
             <Text
               fw={600}
               size="sm"
               truncate
               className="cd-mono"
-              style={{ color: folderColor(session.cwd), minWidth: 0 }}
+              style={{ color: folderColor(session.cwd), minWidth: 0, flex: 1 }}
             >
               {basename(session.cwd)}
             </Text>
           </Tooltip>
           <StatusBadge status={session.status} label={health.label} color={health.color} />
-        </Group>
+        </div>
 
         {session.title && (
           <Text size="sm" fw={500} lineClamp={1} title={session.title}>
@@ -101,15 +101,7 @@ export function SessionCard({ session, onView, onKill }: Props) {
           {session.pid && <MetaItem text={`pid ${session.pid}`} />}
         </Group>
 
-        <Box
-          px="xs"
-          py={6}
-          style={{
-            background: vizColors.page,
-            border: `1px solid ${vizColors.border}`,
-            borderRadius: 8,
-          }}
-        >
+        <Box px="xs" py={6} className="cd-promptline">
           <Group gap={7} wrap="nowrap" align="flex-start">
             <Box mt={2}>{actionIcon(session.lastAction?.type ?? "unknown", session.lastAction?.isError, 14)}</Box>
             <Text size="xs" c="dimmed" lineClamp={2} className="cd-mono" style={{ flex: 1, lineHeight: 1.55 }}>
@@ -144,7 +136,7 @@ export function SessionCard({ session, onView, onKill }: Props) {
           </Text>
         </Group>
 
-        <Group grow gap="xs" mt={2}>
+        <Group grow gap="xs">
           <Button size="xs" variant="default" leftSection={<IconEye size={14} />} onClick={stop(() => onView(session))}>
             View
           </Button>

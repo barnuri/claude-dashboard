@@ -32,11 +32,11 @@ function StatTile({ label, value, sub }: { label: string; value: string; sub?: s
       <Text className="cd-label" c="dimmed">
         {label}
       </Text>
-      <Text fz={26} fw={600} mt={6} lh={1.1} className="cd-mono">
+      <Text fz={22} fw={600} mt={4} lh={1.1} className="cd-mono">
         {value}
       </Text>
       {sub && (
-        <Text size="xs" c="dimmed" mt={4} className="cd-mono">
+        <Text size="xs" c="dimmed" mt={3} className="cd-mono">
           {sub}
         </Text>
       )}
@@ -71,7 +71,7 @@ export function StatsHeader({ stats, period, onPeriodChange }: Props) {
         />
       </Group>
 
-      <SimpleGrid cols={{ base: 1, sm: 2, lg: 4 }} spacing="md">
+      <SimpleGrid cols={{ base: 1, sm: 2, lg: 4 }} spacing="sm">
         <StatTile label="Sessions" value={String(stats.sessionCount)} sub={`active ${windowLabel}`} />
         <StatTile label="Cost" value={formatUsd(stats.totalCostUsd)} sub={windowLabel} />
         <StatTile
@@ -83,8 +83,8 @@ export function StatsHeader({ stats, period, onPeriodChange }: Props) {
           <Group gap="md" wrap="nowrap" align="center">
             <DonutChart
               data={chartData.length > 0 ? chartData : [{ name: "No data", value: 1, color: vizColors.gridline }]}
-              size={64}
-              thickness={10}
+              size={56}
+              thickness={9}
               withTooltip
               tooltipDataSource="segment"
               strokeWidth={0}

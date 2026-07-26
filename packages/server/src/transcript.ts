@@ -107,7 +107,8 @@ function extractLastAction(
     }
     if (blockType === "tool_use") {
       const name = typeof block?.name === "string" ? block.name : "tool";
-      return { type: "tool_use", summary: summarizeToolInput(name, block?.input), toolName: name, at };
+      const toolUseId = typeof block?.id === "string" ? block.id : undefined;
+      return { type: "tool_use", summary: summarizeToolInput(name, block?.input), toolName: name, toolUseId, at };
     }
     return { type: "unknown", summary: "Working…", at };
   }
@@ -119,6 +120,7 @@ function extractLastAction(
       return {
         type: "tool_result",
         summary: isError ? `Tool error: ${truncate(content)}` : truncate(content || "Tool finished"),
+        toolUseId: typeof block?.tool_use_id === "string" ? block.tool_use_id : undefined,
         isError,
         at,
       };
@@ -299,6 +301,25 @@ export function parseTranscriptFile(filePath: string, fallbackId: string): Parse
   return result;
 }
 
+/** Cap per-item detail so a single giant tool result can't bloat the feed payload. */
+const MAX_DETAIL_CHARS = 4000;
+
+function clampDetail(text: string): string | undefined {
+  const trimmed = text.trim();
+  if (!trimmed) return undefined;
+  return trimmed.length > MAX_DETAIL_CHARS ? `${trimmed.slice(0, MAX_DETAIL_CHARS - 1)}…` : trimmed;
+}
+
+/** Fuller content than `summary` for transcript rendering; undefined when summary already carries everything. */
+function extractDetail(blockType: string | undefined, block: unknown, entry: unknown): string | undefined {
+  const blockObj = block && typeof block === "object" ? (block as Record<string, unknown>) : undefined;
+  if (blockType === "text" && typeof blockObj?.text === "string") return clampDetail(blockObj.text);
+  if (blockType === "tool_result") return clampDetail(stringifyToolResultContent(blockObj?.content));
+  const message = entry && typeof entry === "object" ? (entry as { message?: { content?: unknown } }).message : undefined;
+  if (typeof message?.content === "string") return clampDetail(message.content);
+  return undefined;
+}
+
 /** Return the last `limit` significant (non-meta) entries from a transcript, oldest first. */
 export function getTranscriptFeed(filePath: string, limit = 60): TranscriptFeedItem[] {
   let text: string;
@@ -321,10 +342,13 @@ export function getTranscriptFeed(filePath: string, limit = 60): TranscriptFeedI
     if (entry.type !== "assistant" && entry.type !== "user") continue;
 
     const content = Array.isArray(entry.message?.content) ? entry.message.content : [];
-    const block = content[0];
-    const action = extractLastAction(entry, block?.type, block);
-    if (!action) continue;
-    items.push({ ...action, role: entry.type });
+    // A single message can carry several blocks (text + tool_use, multiple tool calls) — emit each.
+    const blocks = content.length > 0 ? content : [undefined];
+    for (const block of blocks) {
+      const action = extractLastAction(entry, block?.type, block);
+      if (!action) continue;
+      items.push({ ...action, role: entry.type, detail: extractDetail(block?.type, block, entry) });
+    }
   }
 
   return items.slice(-limit);

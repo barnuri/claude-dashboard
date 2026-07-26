@@ -17,6 +17,8 @@ export interface LastAction {
   type: LastActionType;
   summary: string;
   toolName?: string;
+  /** tool_use block id (on tool_use) or tool_use_id (on tool_result) — lets clients pair calls with results. */
+  toolUseId?: string;
   isError?: boolean;
   at: string;
 }
@@ -66,6 +68,8 @@ export interface SessionSummary {
 
 export interface TranscriptFeedItem extends LastAction {
   role: "assistant" | "user";
+  /** Fuller (lightly capped) content for transcript rendering — `summary` stays short for cards. */
+  detail?: string;
 }
 
 export interface CreateSessionRequest {

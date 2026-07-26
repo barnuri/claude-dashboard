@@ -12,9 +12,10 @@ export const fonts = {
 };
 
 export const vizColors = {
-  page: "#121110",
-  surface: "#1a1816",
-  raised: "#211e1b",
+  page: "#0d0c0b",
+  surface: "#171512",
+  raised: "#1f1c18",
+  terminal: "#121110",
   textPrimary: "#f2efe9",
   textSecondary: "#b3ac9f",
   muted: "#847d70",
@@ -59,10 +60,10 @@ const dark: MantineColorsTuple = [
   "#847d70",
   "#3a362f",
   "#2a2723",
-  "#1a1816",
-  "#121110",
+  "#171512",
   "#0d0c0b",
-  "#080807",
+  "#0a0908",
+  "#070606",
 ];
 
 export const theme = createTheme({
@@ -78,7 +79,7 @@ export const theme = createTheme({
   defaultRadius: "md",
   components: {
     Card: {
-      defaultProps: { withBorder: true, radius: "lg", padding: "md" },
+      defaultProps: { withBorder: true, radius: "md", padding: 12 },
     },
     Tooltip: {
       defaultProps: { withArrow: true },

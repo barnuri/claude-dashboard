@@ -37,7 +37,7 @@ import { SNAPSHOT_QUERY_KEY } from "./api/queryKeys";
 import { useDashboardSocket } from "./api/useDashboardSocket";
 import { StatsHeader } from "./components/StatsHeader";
 import { SessionCard } from "./components/SessionCard";
-import { SessionDetailDrawer } from "./components/SessionDetailDrawer";
+import { SessionTerminal } from "./components/SessionTerminal";
 import { NewSessionModal } from "./components/NewSessionModal";
 import { ConfirmDialog } from "./components/ConfirmDialog";
 import { ErrorBoundary } from "./components/ErrorBoundary";
@@ -388,7 +388,7 @@ export default function App() {
 
                 <SimpleGrid
                     cols={{ base: 1, sm: 2, lg: 3, xl: 4 }}
-                    spacing='md'
+                    spacing='sm'
                 >
                     {filtered.map((session) => (
                         <ErrorBoundary
@@ -409,7 +409,7 @@ export default function App() {
                 key={selected?.transcriptPath ?? "none"}
                 label='Session detail'
             >
-                <SessionDetailDrawer
+                <SessionTerminal
                     session={selected}
                     onClose={() => setSelected(null)}
                     onKill={handleKill}
