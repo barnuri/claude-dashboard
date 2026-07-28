@@ -1,5 +1,6 @@
 import { readFileSync, statSync } from "node:fs";
-import type { LastAction, TranscriptFeedItem } from "@claude-dashboard/shared";
+import { ASK_USER_QUESTION_TOOL } from "@claude-dashboard/shared";
+import type { AskUserQuestionEntry, LastAction, TranscriptFeedItem } from "@claude-dashboard/shared";
 
 /** Usage recorded for a single assistant turn, tagged with its timestamp and model. */
 export interface TurnUsage {
@@ -51,15 +52,51 @@ const fileCache = new Map<string, CacheEntry>();
 
 const META_LINE_TYPES = new Set(["queue-operation", "attachment", "last-prompt"]);
 
-/** Tool whose call genuinely blocks on the human — a real "needs you" signal, unlike a normal tool_use. */
-const ASK_USER_QUESTION_TOOL = "AskUserQuestion";
-
 function truncate(text: string, max = 140): string {
   const flat = text.replace(/\s+/g, " ").trim();
   return flat.length > max ? `${flat.slice(0, max - 1)}…` : flat;
 }
 
+/** Parse `AskUserQuestion`'s `{ questions: [{ question, header, options, multiSelect }] }` input,
+ * dropping any entry that doesn't match the expected shape rather than trusting it blindly. */
+function parseAskUserQuestionInput(input: unknown): AskUserQuestionEntry[] | undefined {
+  if (!input || typeof input !== "object") return undefined;
+  const rawQuestions = (input as Record<string, unknown>).questions;
+  if (!Array.isArray(rawQuestions)) return undefined;
+
+  const questions: AskUserQuestionEntry[] = [];
+  for (const rawQuestion of rawQuestions) {
+    if (!rawQuestion || typeof rawQuestion !== "object") continue;
+    const q = rawQuestion as Record<string, unknown>;
+    if (typeof q.question !== "string" || typeof q.header !== "string") continue;
+
+    const rawOptions = Array.isArray(q.options) ? q.options : [];
+    const options = rawOptions
+      .filter((option): option is Record<string, unknown> => Boolean(option) && typeof option === "object")
+      .filter((option) => typeof option.label === "string")
+      .map((option) => ({
+        label: option.label as string,
+        description: typeof option.description === "string" ? option.description : undefined,
+      }));
+    if (options.length === 0) continue;
+
+    questions.push({
+      question: q.question,
+      header: q.header,
+      options,
+      multiSelect: typeof q.multiSelect === "boolean" ? q.multiSelect : undefined,
+    });
+  }
+  return questions.length > 0 ? questions : undefined;
+}
+
 function summarizeToolInput(name: string, input: unknown): string {
+  if (name === ASK_USER_QUESTION_TOOL) {
+    const questions = parseAskUserQuestionInput(input);
+    if (!questions) return name;
+    const extra = questions.length > 1 ? ` (+${questions.length - 1} more)` : "";
+    return `${name}: ${truncate(questions[0].question, 100)}${extra}`;
+  }
   if (!input || typeof input !== "object") return name;
   const obj = input as Record<string, unknown>;
   if (typeof obj.command === "string") return `${name}: ${truncate(obj.command, 100)}`;
@@ -347,7 +384,16 @@ export function getTranscriptFeed(filePath: string, limit = 60): TranscriptFeedI
     for (const block of blocks) {
       const action = extractLastAction(entry, block?.type, block);
       if (!action) continue;
-      items.push({ ...action, role: entry.type, detail: extractDetail(block?.type, block, entry) });
+      const questions =
+        block?.type === "tool_use" && block?.name === ASK_USER_QUESTION_TOOL
+          ? parseAskUserQuestionInput(block?.input)
+          : undefined;
+      items.push({
+        ...action,
+        role: entry.type,
+        detail: extractDetail(block?.type, block, entry),
+        askUserQuestion: questions ? { questions } : undefined,
+      });
     }
   }
 

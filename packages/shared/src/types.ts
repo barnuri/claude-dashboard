@@ -66,10 +66,29 @@ export interface SessionSummary {
   logPath: string | null;
 }
 
+/** Tool name Claude Code uses to block on a genuine human decision — shared so server and web agree on it. */
+export const ASK_USER_QUESTION_TOOL = "AskUserQuestion";
+
+export interface AskUserQuestionOption {
+  label: string;
+  description?: string;
+}
+
+export interface AskUserQuestionEntry {
+  question: string;
+  header: string;
+  options: AskUserQuestionOption[];
+  multiSelect?: boolean;
+}
+
 export interface TranscriptFeedItem extends LastAction {
   role: "assistant" | "user";
   /** Fuller (lightly capped) content for transcript rendering — `summary` stays short for cards. */
   detail?: string;
+  /** Present when this is an `AskUserQuestion` tool_use — the structured question(s) and choices to render. */
+  askUserQuestion?: {
+    questions: AskUserQuestionEntry[];
+  };
 }
 
 export interface CreateSessionRequest {

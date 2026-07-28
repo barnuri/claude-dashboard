@@ -15,6 +15,7 @@ import {
   IconGitBranch,
   IconPlayerStopFilled,
 } from "@tabler/icons-react";
+import { ASK_USER_QUESTION_TOOL } from "@claude-dashboard/shared";
 import type { SessionSummary, TranscriptFeedItem } from "@claude-dashboard/shared";
 import { fetchFeed } from "../api/client";
 import { feedQueryKey } from "../api/queryKeys";
@@ -94,6 +95,54 @@ function TranscriptEntry({ row }: { row: TranscriptRow }) {
         </span>
         <div className="cd-t-text">Thinking…</div>
       </div>
+    );
+  }
+
+  if (item.type === "tool_use" && item.toolName === ASK_USER_QUESTION_TOOL && item.askUserQuestion) {
+    const pending = !result;
+    return (
+      <Fragment>
+        <div className={`cd-t-entry cd-t-entry--question${pending ? " cd-t-entry--question-pending" : ""}`}>
+          <span className="cd-t-glyph" aria-hidden>
+            {pending ? "?" : "⏺"}
+          </span>
+          <div className="cd-t-text">
+            {item.askUserQuestion.questions.map((question, questionIndex) => (
+              <div className="cd-t-question" key={questionIndex}>
+                <div className="cd-t-question-header">
+                  {question.header}
+                  {question.multiSelect && <span className="cd-t-question-multi"> · select all that apply</span>}
+                </div>
+                <div className="cd-t-question-text">{question.question}</div>
+                <div className="cd-t-question-options">
+                  {question.options.map((option, optionIndex) => (
+                    <div className="cd-t-question-option" key={optionIndex}>
+                      <span className="cd-t-question-option-label">{option.label}</span>
+                      {option.description && (
+                        <span className="cd-t-question-option-desc"> — {option.description}</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+            {pending && (
+              <div className="cd-t-question-pending-tag">
+                <span className="cd-led cd-led--pulse" aria-hidden />
+                Waiting for your answer
+              </div>
+            )}
+          </div>
+        </div>
+        {result && (
+          <div className={`cd-t-result${result.isError ? " cd-t-result--error" : ""}`}>
+            <span className="cd-t-glyph" aria-hidden>
+              ⎿
+            </span>
+            <div className="cd-t-text">{contentOf(result)}</div>
+          </div>
+        )}
+      </Fragment>
     );
   }
 

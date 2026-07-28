@@ -261,6 +261,86 @@ body {
   color: var(--cd-red);
 }
 
+/* AskUserQuestion: rendered as its own card so the question and choices are
+   never lost inside the generic tool_use one-liner. */
+.cd-t-entry--question .cd-t-glyph {
+  color: var(--cd-amber);
+}
+
+.cd-t-entry--question .cd-t-text {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.cd-t-question {
+  border: 1px solid var(--cd-border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.cd-t-entry--question-pending .cd-t-question {
+  border-color: rgba(240, 180, 41, 0.4);
+  background: rgba(240, 180, 41, 0.07);
+}
+
+.cd-t-question-header {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--cd-dim);
+  margin-bottom: 4px;
+}
+
+.cd-t-question-multi {
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.cd-t-question-text {
+  color: #f2efe9;
+  font-weight: 500;
+  margin-bottom: 8px;
+}
+
+.cd-t-question-options {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.cd-t-question-option {
+  border: 1px solid var(--cd-border);
+  border-radius: 6px;
+  padding: 5px 9px;
+  color: #d9d4c9;
+}
+
+.cd-t-question-option-label {
+  font-weight: 600;
+  color: #f2efe9;
+}
+
+.cd-t-question-option-desc {
+  color: var(--cd-dim);
+}
+
+.cd-t-question-pending-tag {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--cd-amber);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.cd-t-question-pending-tag .cd-led {
+  color: var(--cd-amber);
+}
+
 /* Blinking block cursor for running sessions. */
 .cd-cursor {
   display: inline-block;

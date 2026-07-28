@@ -108,3 +108,106 @@ describe("getTranscriptFeed", () => {
     expect(getTranscriptFeed("/nonexistent/nope.jsonl")).toEqual([]);
   });
 });
+
+describe("getTranscriptFeed AskUserQuestion", () => {
+  test("attaches a structured askUserQuestion payload and a readable summary for a single question", () => {
+    const file = writeTranscript([
+      assistantLine([
+        {
+          type: "tool_use",
+          id: "tu_1",
+          name: "AskUserQuestion",
+          input: {
+            questions: [
+              {
+                question: "Which approach should we take?",
+                header: "Approach",
+                options: [
+                  { label: "Rewrite", description: "Start from scratch" },
+                  { label: "Patch", description: "Fix in place" },
+                ],
+              },
+            ],
+          },
+        },
+      ]),
+    ]);
+
+    const feed = getTranscriptFeed(file);
+    expect(feed[0].summary).toBe("AskUserQuestion: Which approach should we take?");
+    expect(feed[0].askUserQuestion?.questions).toEqual([
+      {
+        question: "Which approach should we take?",
+        header: "Approach",
+        options: [
+          { label: "Rewrite", description: "Start from scratch" },
+          { label: "Patch", description: "Fix in place" },
+        ],
+        multiSelect: undefined,
+      },
+    ]);
+  });
+
+  test("summarizes multiple questions with a count of the remainder and preserves multiSelect", () => {
+    const file = writeTranscript([
+      assistantLine([
+        {
+          type: "tool_use",
+          id: "tu_1",
+          name: "AskUserQuestion",
+          input: {
+            questions: [
+              { question: "First question?", header: "Q1", options: [{ label: "A" }] },
+              { question: "Second question?", header: "Q2", options: [{ label: "B" }], multiSelect: true },
+            ],
+          },
+        },
+      ]),
+    ]);
+
+    const feed = getTranscriptFeed(file);
+    expect(feed[0].summary).toBe("AskUserQuestion: First question? (+1 more)");
+    expect(feed[0].askUserQuestion?.questions[1].multiSelect).toBe(true);
+  });
+
+  test("falls back to the bare tool name when input doesn't match the expected shape", () => {
+    const file = writeTranscript([
+      assistantLine([{ type: "tool_use", id: "tu_1", name: "AskUserQuestion", input: {} }]),
+    ]);
+
+    const feed = getTranscriptFeed(file);
+    expect(feed[0].summary).toBe("AskUserQuestion");
+    expect(feed[0].askUserQuestion).toBeUndefined();
+  });
+
+  test("drops individual questions with no valid options rather than failing the whole payload", () => {
+    const file = writeTranscript([
+      assistantLine([
+        {
+          type: "tool_use",
+          id: "tu_1",
+          name: "AskUserQuestion",
+          input: {
+            questions: [
+              { question: "No options here", header: "Q1", options: [] },
+              { question: "Has options", header: "Q2", options: [{ label: "Yes" }] },
+            ],
+          },
+        },
+      ]),
+    ]);
+
+    const feed = getTranscriptFeed(file);
+    expect(feed[0].askUserQuestion?.questions).toHaveLength(1);
+    expect(feed[0].askUserQuestion?.questions[0].header).toBe("Q2");
+  });
+
+  test("other tool_use calls never carry an askUserQuestion payload", () => {
+    const file = writeTranscript([
+      assistantLine([{ type: "tool_use", id: "tu_1", name: "Read", input: { file_path: "/a" } }]),
+    ]);
+
+    const feed = getTranscriptFeed(file);
+    expect(feed[0].askUserQuestion).toBeUndefined();
+  });
+});
