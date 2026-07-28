@@ -1,6 +1,12 @@
 import { readFileSync, statSync } from "node:fs";
 import { ASK_USER_QUESTION_TOOL } from "@claude-dashboard/shared";
-import type { AskUserQuestionEntry, LastAction, TranscriptFeedItem } from "@claude-dashboard/shared";
+import type {
+  AskUserQuestionEntry,
+  LastAction,
+  NativeTaskEntry,
+  NativeTaskStatus,
+  TranscriptFeedItem,
+} from "@claude-dashboard/shared";
 
 /** Usage recorded for a single assistant turn, tagged with its timestamp and model. */
 export interface TurnUsage {
@@ -40,6 +46,8 @@ export interface ParsedTranscript {
   turns: TurnUsage[];
   /** Total input tokens attributed to the single most recent assistant turn — used as the "context used" estimate. */
   lastTurnContextTokens: number;
+  /** Best-effort snapshot of this session's native tasks (TaskCreate/TaskUpdate/TaskList/TaskGet) — see reconstructTaskBoard. */
+  taskBoard: NativeTaskEntry[];
 }
 
 interface CacheEntry {
@@ -88,6 +96,74 @@ function parseAskUserQuestionInput(input: unknown): AskUserQuestionEntry[] | und
     });
   }
   return questions.length > 0 ? questions : undefined;
+}
+
+const TASK_CREATE_TOOL = "TaskCreate";
+const TASK_UPDATE_TOOL = "TaskUpdate";
+const TASK_LIST_TOOL = "TaskList";
+const TASK_GET_TOOL = "TaskGet";
+type TaskResultTool = typeof TASK_CREATE_TOOL | typeof TASK_LIST_TOOL | typeof TASK_GET_TOOL;
+
+const NATIVE_TASK_STATUSES = new Set<NativeTaskStatus>(["pending", "in_progress", "completed"]);
+
+function isNativeTaskStatus(value: unknown): value is NativeTaskStatus {
+  return typeof value === "string" && NATIVE_TASK_STATUSES.has(value as NativeTaskStatus);
+}
+
+/** `TaskUpdate`'s `taskId` is in the tool_use input itself, so it can be applied without waiting for a result. */
+function applyTaskUpdateInput(board: Map<string, NativeTaskEntry>, input: unknown): void {
+  if (!input || typeof input !== "object") return;
+  const obj = input as Record<string, unknown>;
+  const taskId = typeof obj.taskId === "string" ? obj.taskId : undefined;
+  if (!taskId) return;
+
+  if (obj.status === "deleted") {
+    board.delete(taskId);
+    return;
+  }
+
+  const existing = board.get(taskId);
+  const subject = typeof obj.subject === "string" ? obj.subject : existing?.subject;
+  const status = isNativeTaskStatus(obj.status) ? obj.status : existing?.status;
+  if (!subject || !status) return;
+  board.set(taskId, { id: taskId, subject, status });
+}
+
+/** `Task #<id> created successfully: <subject>` — the only place TaskCreate's assigned id appears. */
+const TASK_CREATE_RESULT_RE = /^Task #(\d+) created successfully: (.+)$/;
+/** `Task #<id>: <subject>\nStatus: <status>\nDescription: ...` — TaskGet's single-task detail dump. */
+const TASK_GET_RESULT_RE = /^Task #(\d+): (.+?)\nStatus: (\w+)/;
+/** `#<id> [<status>] <subject>` per line — TaskList's full-board dump. A trailing `(<owner>)` is part
+ * of this same capture rather than stripped separately: subjects can legitimately end in parenthesized
+ * text of their own (e.g. "... (helm-streaming variant)"), and the wire format gives no way to tell
+ * that apart from an owner suffix — so we keep the full trailing text rather than risk truncating it. */
+const TASK_LIST_LINE_RE = /^#(\d+)\s+\[(\w+)\]\s+(.+)$/gm;
+
+/** `TaskCreate`/`TaskList`/`TaskGet` only reveal task ids and authoritative status via their tool_result text. */
+function applyTaskToolResult(board: Map<string, NativeTaskEntry>, toolName: TaskResultTool, resultText: string): void {
+  if (toolName === TASK_CREATE_TOOL) {
+    const match = TASK_CREATE_RESULT_RE.exec(resultText);
+    if (!match) return;
+    const [, id, subject] = match;
+    board.set(id, { id, subject, status: "pending" });
+    return;
+  }
+
+  if (toolName === TASK_GET_TOOL) {
+    const match = TASK_GET_RESULT_RE.exec(resultText);
+    if (!match || !isNativeTaskStatus(match[3])) return;
+    const [, id, subject, status] = match;
+    board.set(id, { id, subject, status });
+    return;
+  }
+
+  // TaskList reflects the harness's actual registry at this instant — an authoritative overlay,
+  // including tasks this session didn't create itself (e.g. shared team tasks).
+  for (const match of resultText.matchAll(TASK_LIST_LINE_RE)) {
+    const [, id, status, subject] = match;
+    if (!isNativeTaskStatus(status)) continue;
+    board.set(id, { id, subject: subject.trim(), status });
+  }
 }
 
 function summarizeToolInput(name: string, input: unknown): string {
@@ -211,6 +287,8 @@ export function parseTranscriptFile(filePath: string, fallbackId: string): Parse
   let lastAction: LastAction | null = null;
   let turnComplete = false;
   const pendingAskUserQuestionIds = new Set<string>();
+  const taskBoard = new Map<string, NativeTaskEntry>();
+  const pendingTaskToolCalls = new Map<string, TaskResultTool>();
 
   const seenAssistantMessageIds = new Set<string>();
   let inputTokens = 0;
@@ -285,8 +363,17 @@ export function parseTranscriptFile(filePath: string, fallbackId: string): Parse
       if (action) lastAction = action;
 
       for (const contentBlock of blocks) {
-        if (contentBlock?.type === "tool_use" && contentBlock?.name === ASK_USER_QUESTION_TOOL && typeof contentBlock?.id === "string") {
+        if (contentBlock?.type !== "tool_use" || typeof contentBlock?.id !== "string") continue;
+        if (contentBlock.name === ASK_USER_QUESTION_TOOL) {
           pendingAskUserQuestionIds.add(contentBlock.id);
+        } else if (contentBlock.name === TASK_UPDATE_TOOL) {
+          applyTaskUpdateInput(taskBoard, contentBlock.input);
+        } else if (
+          contentBlock.name === TASK_CREATE_TOOL ||
+          contentBlock.name === TASK_LIST_TOOL ||
+          contentBlock.name === TASK_GET_TOOL
+        ) {
+          pendingTaskToolCalls.set(contentBlock.id, contentBlock.name);
         }
       }
 
@@ -303,8 +390,13 @@ export function parseTranscriptFile(filePath: string, fallbackId: string): Parse
       turnComplete = false;
 
       for (const contentBlock of blocks) {
-        if (contentBlock?.type === "tool_result" && typeof contentBlock?.tool_use_id === "string") {
-          pendingAskUserQuestionIds.delete(contentBlock.tool_use_id);
+        if (contentBlock?.type !== "tool_result" || typeof contentBlock?.tool_use_id !== "string") continue;
+        pendingAskUserQuestionIds.delete(contentBlock.tool_use_id);
+
+        const taskToolName = pendingTaskToolCalls.get(contentBlock.tool_use_id);
+        if (taskToolName) {
+          pendingTaskToolCalls.delete(contentBlock.tool_use_id);
+          applyTaskToolResult(taskBoard, taskToolName, stringifyToolResultContent(contentBlock.content));
         }
       }
     }
@@ -332,6 +424,7 @@ export function parseTranscriptFile(filePath: string, fallbackId: string): Parse
     },
     turns,
     lastTurnContextTokens,
+    taskBoard: Array.from(taskBoard.values()).sort((a, b) => Number(a.id) - Number(b.id)),
   };
 
   fileCache.set(filePath, { mtimeMs: stat.mtimeMs, size: stat.size, result });

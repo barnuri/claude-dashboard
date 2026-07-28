@@ -42,6 +42,15 @@ export interface SessionCost {
   cacheReadUsd: number;
 }
 
+export type NativeTaskStatus = "pending" | "in_progress" | "completed";
+
+/** A single entry in Claude Code's native Task system (TaskCreate/TaskUpdate/TaskList/TaskGet), reconstructed from the transcript. */
+export interface NativeTaskEntry {
+  id: string;
+  subject: string;
+  status: NativeTaskStatus;
+}
+
 export interface SessionSummary {
   id: string;
   cwd: string;
@@ -64,6 +73,10 @@ export interface SessionSummary {
   hasPendingPermissionRequest: boolean;
   /** Path to this session's live output log, if it was launched via the dashboard's "New session" flow; null otherwise. */
   logPath: string | null;
+  /** Best-effort snapshot of this session's native tasks, reconstructed from TaskCreate/TaskUpdate/TaskList/TaskGet calls in its own transcript — may be incomplete for tasks created/updated by other sessions or subagents. */
+  taskBoard: NativeTaskEntry[];
+  /** Output tokens of the most recently completed assistant turn, or null if none — used to approximate the CLI's per-turn processing indicator. */
+  lastTurnOutputTokens: number | null;
 }
 
 /** Tool name Claude Code uses to block on a genuine human decision — shared so server and web agree on it. */

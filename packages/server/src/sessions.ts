@@ -210,6 +210,8 @@ export async function buildDashboardSnapshot(): Promise<DashboardSnapshot> {
       messageCount: parsed.messageCount,
       transcriptPath: tf.filePath,
       hasPendingPermissionRequest: false,
+      taskBoard: parsed.taskBoard,
+      lastTurnOutputTokens: parsed.turns.at(-1)?.outputTokens ?? null,
     };
   });
 

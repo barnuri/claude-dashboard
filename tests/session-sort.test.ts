@@ -29,6 +29,8 @@ function makeSession(overrides: Partial<SessionSummary> = {}): SessionSummary {
     transcriptPath: "/tmp/project/s.jsonl",
     hasPendingPermissionRequest: false,
     logPath: null,
+    taskBoard: [],
+    lastTurnOutputTokens: null,
     ...overrides,
   };
 }

@@ -16,13 +16,14 @@ import {
   IconPlayerStopFilled,
 } from "@tabler/icons-react";
 import { ASK_USER_QUESTION_TOOL } from "@claude-dashboard/shared";
-import type { SessionSummary, TranscriptFeedItem } from "@claude-dashboard/shared";
+import type { NativeTaskEntry, SessionSummary, TranscriptFeedItem } from "@claude-dashboard/shared";
 import { fetchFeed } from "../api/client";
 import { feedQueryKey } from "../api/queryKeys";
 import { ContextMeter } from "./ContextMeter";
 import { LiveOutputPanel } from "./LiveOutputPanel";
 import { StatusBadge } from "./StatusBadge";
 import { basename, formatRelativeTime, formatTokens, formatUsd } from "../utils/format";
+import { partitionTaskBoard } from "../utils/taskBoard";
 
 interface Props {
   session: SessionSummary;
@@ -193,6 +194,69 @@ function TranscriptEntry({ row }: { row: TranscriptRow }) {
   );
 }
 
+const TASK_BOARD_MAX_VISIBLE = 5;
+
+const TASK_STATUS_GLYPH: Record<NativeTaskEntry["status"], string> = {
+  pending: "☐",
+  in_progress: "◐",
+  completed: "☑",
+};
+
+/**
+ * Best-effort snapshot of this session's native tasks (TaskCreate/TaskUpdate/TaskList/TaskGet),
+ * reconstructed server-side from this session's own transcript — may be incomplete for tasks
+ * created/updated by other sessions or background subagents. Incomplete tasks are shown first;
+ * completed ones are the first to collapse into the "+N" overflow line when the list is long.
+ */
+function TaskBoardPanel({ tasks }: { tasks: NativeTaskEntry[] }) {
+  if (tasks.length === 0) return null;
+
+  const { visible, hiddenPending, hiddenDone } = partitionTaskBoard(tasks, TASK_BOARD_MAX_VISIBLE);
+  const completedCount = tasks.filter((task) => task.status === "completed").length;
+
+  return (
+    <div className="cd-taskboard">
+      <div className="cd-taskboard-header">
+        Tasks · {completedCount}/{tasks.length} done
+      </div>
+      {visible.map((task) => (
+        <div key={task.id} className={`cd-taskboard-row cd-taskboard-row--${task.status}`}>
+          <span className="cd-t-glyph" aria-hidden>
+            {TASK_STATUS_GLYPH[task.status]}
+          </span>
+          <span className="cd-taskboard-subject">{task.subject}</span>
+        </div>
+      ))}
+      {hiddenPending + hiddenDone > 0 && (
+        <div className="cd-taskboard-overflow">
+          {hiddenPending > 0 && <span>+{hiddenPending} pending</span>}
+          {hiddenDone > 0 && <span>+{hiddenDone} done</span>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Ticks once a second while `active`, returning "Xm Ys" elapsed since `sinceIso` (null once inactive/unknown). */
+function useElapsedSince(sinceIso: string | null, active: boolean): string | null {
+  const [, forceTick] = useState(0);
+
+  useEffect(() => {
+    if (!active) return;
+    const id = setInterval(() => forceTick((n) => n + 1), 1000);
+    return () => clearInterval(id);
+  }, [active]);
+
+  if (!active || !sinceIso) return null;
+  const sinceMs = Date.parse(sinceIso);
+  if (Number.isNaN(sinceMs)) return null;
+
+  const totalSeconds = Math.max(0, Math.floor((Date.now() - sinceMs) / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`;
+}
+
 /**
  * The signature view: a selected session rendered as a full-page read-only
  * Claude Code terminal — window chrome with a back control, TUI-style
@@ -214,6 +278,7 @@ export function SessionTerminal({ session, onBack, onKill }: Props) {
   const live = data?.session ?? session;
   const rows = pairToolResults(data?.feed ?? []);
   const isRunning = live.status === "running";
+  const elapsed = useElapsedSince(live.lastActivityAt, isRunning);
 
   useEffect(() => {
     setTab("transcript");
@@ -317,6 +382,8 @@ export function SessionTerminal({ session, onBack, onKill }: Props) {
         </Button>
       </div>
 
+      <TaskBoardPanel tasks={live.taskBoard} />
+
       {tab === "transcript" ? (
         <div
           ref={bodyRef}
@@ -351,6 +418,15 @@ export function SessionTerminal({ session, onBack, onKill }: Props) {
       )}
 
       <div className="cd-terminal-statusline cd-mono">
+        {isRunning && elapsed && (
+          <Group gap={6} wrap="nowrap" className="cd-processing-chip">
+            <span className="cd-led cd-led--pulse" style={{ color: "var(--cd-brand)" }} aria-hidden />
+            <span>processing {elapsed}</span>
+          </Group>
+        )}
+        {isRunning && live.lastTurnOutputTokens != null && (
+          <span>last turn ↓ {formatTokens(live.lastTurnOutputTokens)}</span>
+        )}
         {live.model && <span>{live.model}</span>}
         {live.gitBranch && (
           <Group gap={4} wrap="nowrap">

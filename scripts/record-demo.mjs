@@ -66,11 +66,17 @@ async function runDemoSequence(page) {
   await page.getByText("Token mix").scrollIntoViewIfNeeded().catch(() => {});
   await page.waitForTimeout(1200);
 
-  // Open the first session's detail drawer to show the live activity timeline.
-  const viewButton = page.getByRole("button", { name: "View" }).first();
-  if (await viewButton.count()) {
-    await viewButton.click();
-    await page.waitForTimeout(2500);
+  // Open the agent-platform audit session — it's the one mock session wired up to show off the
+  // task board panel, an unresolved AskUserQuestion card, and the live running-turn indicator
+  // together (see packages/server/src/mock.ts "mock-agent-platform-audit").
+  const auditCard = page.getByRole("button", { name: /agent-platform/ });
+  const fallbackCard = page.getByRole("button", { name: "View" }).first();
+  const sessionCard = (await auditCard.count()) ? auditCard : fallbackCard;
+  const openButton = (await auditCard.count()) ? auditCard.getByRole("button", { name: "View" }) : sessionCard;
+  if (await sessionCard.count()) {
+    await openButton.click();
+    await page.waitForTimeout(2500); // let the task board + question card render
+    await page.waitForTimeout(1500); // linger so the "processing" elapsed-time chip visibly ticks
     await page.keyboard.press("Escape");
     await page.waitForTimeout(500);
   }

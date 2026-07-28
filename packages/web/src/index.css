@@ -164,6 +164,61 @@ body {
   min-width: 0;
 }
 
+/* Best-effort native Task board (TaskCreate/TaskUpdate/TaskList/TaskGet), reconstructed
+   server-side — a persistent panel rather than transcript rows, mirroring the CLI's own widget. */
+.cd-taskboard {
+  padding: 8px 14px;
+  background: var(--cd-raised);
+  border-bottom: 1px solid var(--cd-border);
+  font-size: 12px;
+}
+
+.cd-taskboard-header {
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--cd-dim);
+  margin-bottom: 4px;
+}
+
+.cd-taskboard-row {
+  display: grid;
+  grid-template-columns: 16px 1fr;
+  column-gap: 6px;
+  padding: 1px 0;
+  color: var(--cd-dim);
+}
+
+.cd-taskboard-row--in_progress {
+  color: var(--cd-amber);
+}
+
+.cd-taskboard-row--in_progress .cd-taskboard-subject {
+  color: #f2efe9;
+}
+
+.cd-taskboard-row--completed {
+  color: var(--cd-green);
+}
+
+.cd-taskboard-row--completed .cd-taskboard-subject {
+  color: var(--cd-dim);
+  text-decoration: line-through;
+}
+
+.cd-taskboard-subject {
+  color: #d9d4c9;
+}
+
+.cd-taskboard-overflow {
+  display: flex;
+  gap: 10px;
+  padding-left: 22px;
+  color: var(--cd-dim);
+  font-size: 11px;
+}
+
 .cd-terminal-body {
   flex: 1;
   min-height: 0;
@@ -378,6 +433,12 @@ body {
   background: var(--cd-raised);
   font-size: 11.5px;
   color: var(--cd-dim);
+}
+
+/* Best-effort approximation of the CLI's live spinner — elapsed time since last activity, not an exact replica. */
+.cd-processing-chip {
+  color: var(--cd-brand);
+  font-weight: 600;
 }
 
 .cd-readonly-badge {

@@ -2,6 +2,7 @@ import {
   calculateCost,
   resolveModelPricing,
   type DashboardSnapshot,
+  type NativeTaskEntry,
   type SessionStatus,
   type SessionSummary,
   type TranscriptFeedItem,
@@ -28,6 +29,8 @@ interface MockSessionSpec {
     readonly cacheCreationTokens: number;
   };
   readonly lastActionSummary: string;
+  /** Native TaskCreate/TaskUpdate/TaskList board snapshot to show in this mock session's terminal, if any. */
+  readonly taskBoard?: readonly NativeTaskEntry[];
 }
 
 interface MockFeedStep {
@@ -36,6 +39,8 @@ interface MockFeedStep {
   readonly summary: string;
   readonly toolName?: string;
   readonly minutesAgo: number;
+  /** Set on the (typically final, unresolved) AskUserQuestion step to demo the question/choices card. */
+  readonly askUserQuestion?: TranscriptFeedItem["askUserQuestion"];
 }
 
 /**
@@ -116,6 +121,30 @@ export class MockDataProvider {
       lastActionSummary: "Wrote conflict-resolution notes to docs/offline-sync.md.",
     },
     {
+      id: "mock-agent-platform-audit",
+      cwd: "/home/dev/projects/agent-platform",
+      gitBranch: "main",
+      model: "claude-opus-4-8",
+      title: "Audit prod deploys across agent-platform services",
+      status: "running",
+      pid: 49102,
+      startedMinutesAgo: 8,
+      lastActivityMinutesAgo: 0,
+      turnCount: 9,
+      perTurn: { inputTokens: 2200, outputTokens: 1100, cacheReadTokens: 61000, cacheCreationTokens: 4100 },
+      lastActionSummary: "Needs your answer on the diff strategy before continuing.",
+      taskBoard: [
+        { id: "1", subject: "Diff master vs prod: control-plane", status: "completed" },
+        { id: "2", subject: "Diff master vs prod: agent-runner-langchain-1", status: "in_progress" },
+        { id: "3", subject: "Diff master vs prod: agent-runner-langchain-1-streaming", status: "pending" },
+        { id: "4", subject: "Diff master vs prod: backoffice", status: "pending" },
+        { id: "5", subject: "Diff master vs prod: ai-actions", status: "pending" },
+        { id: "6", subject: "Diff master vs prod: guardrails", status: "pending" },
+        { id: "7", subject: "Diff master vs prod: data-plane", status: "pending" },
+        { id: "8", subject: "Diff master vs prod: llm-gw", status: "pending" },
+      ],
+    },
+    {
       id: "mock-docs-site",
       cwd: "/home/dev/projects/docs-site",
       gitBranch: "main",
@@ -131,7 +160,64 @@ export class MockDataProvider {
     },
   ];
 
-  private static readonly FEED_SCRIPT: readonly MockFeedStep[] = [
+  /** Feed script for a specific demo session id — falls back to DEFAULT_FEED_SCRIPT when absent. */
+  private static readonly FEED_SCRIPTS_BY_ID: Readonly<Record<string, readonly MockFeedStep[]>> = {
+    "mock-agent-platform-audit": [
+      {
+        role: "user",
+        type: "user_message",
+        summary: "Audit which of our prod services have drifted from master before we touch anything.",
+        minutesAgo: 8,
+      },
+      {
+        role: "assistant",
+        type: "text",
+        summary: "I'll track one task per service, then diff each against its deployed revision.",
+        minutesAgo: 7,
+      },
+      { role: "assistant", type: "tool_use", summary: "TaskCreate: Diff master vs prod: control-plane", toolName: "TaskCreate", minutesAgo: 7 },
+      { role: "user", type: "tool_result", summary: "Task #1 created successfully: Diff master vs prod: control-plane", minutesAgo: 7 },
+      { role: "assistant", type: "tool_use", summary: "TaskCreate: Diff master vs prod: agent-runner-langchain-1", toolName: "TaskCreate", minutesAgo: 6 },
+      { role: "user", type: "tool_result", summary: "Task #2 created successfully: Diff master vs prod: agent-runner-langchain-1", minutesAgo: 6 },
+      {
+        role: "assistant",
+        type: "text",
+        summary: "Created trackers for all 8 services — diffing control-plane first.",
+        minutesAgo: 6,
+      },
+      { role: "assistant", type: "tool_use", summary: "Bash: git log origin/master -- apps/control-plane", toolName: "Bash", minutesAgo: 5 },
+      { role: "user", type: "tool_result", summary: "3 commits ahead of the prod-deployed revision", minutesAgo: 5 },
+      {
+        role: "assistant",
+        type: "text",
+        summary:
+          "control-plane is 3 commits ahead of prod — none look risky. Before I diff the rest, I want to confirm the strategy.",
+        minutesAgo: 3,
+      },
+      {
+        role: "assistant",
+        type: "tool_use",
+        summary: "AskUserQuestion: Should I include commits merged in the last hour, or only fully-baked ones?",
+        toolName: "AskUserQuestion",
+        minutesAgo: 0,
+        askUserQuestion: {
+          questions: [
+            {
+              header: "Diff strategy",
+              question: "Should I include commits merged in the last hour, or only fully-baked ones?",
+              options: [
+                { label: "All commits", description: "Include everything on master, even very recent merges" },
+                { label: "Baked only", description: "Exclude commits merged in the last hour to avoid flagging in-flight work" },
+              ],
+              multiSelect: false,
+            },
+          ],
+        },
+      },
+    ],
+  };
+
+  private static readonly DEFAULT_FEED_SCRIPT: readonly MockFeedStep[] = [
     { role: "user", type: "user_message", summary: "Pick up the next task from the plan and implement it.", minutesAgo: 34 },
     { role: "assistant", type: "thinking", summary: "Thinking…", minutesAgo: 33 },
     { role: "assistant", type: "tool_use", summary: "Read: src/components/SessionList.tsx", toolName: "Read", minutesAgo: 32 },
@@ -195,11 +281,13 @@ export class MockDataProvider {
     if (!spec) {
       return [];
     }
-    const items = MockDataProvider.FEED_SCRIPT.map((step) => ({
+    const script = MockDataProvider.FEED_SCRIPTS_BY_ID[sessionId] ?? MockDataProvider.DEFAULT_FEED_SCRIPT;
+    const items = script.map((step) => ({
       type: step.type,
       summary: step.summary,
       ...(step.toolName ? { toolName: step.toolName } : {}),
       ...(step.type === "tool_result" ? { isError: false } : {}),
+      ...(step.askUserQuestion ? { askUserQuestion: step.askUserQuestion } : {}),
       at: this.minutesAgoIso(now, spec.lastActivityMinutesAgo + step.minutesAgo),
       role: step.role,
     }));
@@ -282,6 +370,8 @@ export class MockDataProvider {
       transcriptPath: `/home/dev/.claude/projects${spec.cwd.replace(/\//g, "-")}/${spec.id}.jsonl`,
       hasPendingPermissionRequest: false,
       logPath: null,
+      taskBoard: spec.taskBoard ? [...spec.taskBoard] : [],
+      lastTurnOutputTokens: lastTurn?.outputTokens ?? null,
     };
   }
 
